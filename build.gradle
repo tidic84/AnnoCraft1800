@@ -1,0 +1,83 @@
+plugins {
+    id 'java'
+    id 'net.minecraftforge.gradle' version '6.0.54'
+}
+group = 'fr.annocraft'
+version = '0.1.0'
+base { archivesName = 'annocraft1800' }
+java.toolchain.languageVersion = JavaLanguageVersion.of(17)
+java.withSourcesJar()
+minecraft {
+    mappings channel: 'official', version: '1.20.1'
+    accessTransformer = file('src/main/resources/META-INF/accesstransformer.cfg')
+    copyIdeResources = true
+    runs {
+        configureEach {
+            workingDirectory project.file('run')
+            property 'forge.logging.console.level', 'info'
+            mods { annocraft1800 { source sourceSets.main } }
+        }
+        client {
+            if (project.hasProperty('clientSmoke')) {
+                workingDirectory project.file('run-client-smoke')
+                property 'annocraft1800.clientSmoke', 'true'
+                args '--width', '1280', '--height', '720'
+            }
+        }
+        server { args '--nogui' }
+        gameTestServer {
+            workingDirectory project.file(project.hasProperty('networkSmoke') ? 'run-network-smoke' : 'run-gametest')
+            property 'forge.enabledGameTestNamespaces', 'annocraft1800'
+            property 'annocraft1800.tests', 'true'
+            if (project.hasProperty('networkSmoke')) property 'annocraft1800.networkSmoke', 'true'
+            if (project.hasProperty('networkReload')) property 'annocraft1800.networkReload', 'true'
+        }
+    }
+}
+repositories { mavenCentral() }
+dependencies {
+    minecraft 'net.minecraftforge:forge:1.20.1-47.4.0'
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+}
+test { useJUnitPlatform() }
+tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }
+jar {
+    from('LICENSE', 'NOTICE.md')
+    finalizedBy 'reobfJar'
+}
+tasks.register('sourceDistribution', Zip) {
+    archiveClassifier = 'source-distribution'
+    destinationDirectory = layout.buildDirectory.dir('distributions')
+    from('LICENSE', 'NOTICE.md', 'README.md', 'build.gradle', 'settings.gradle', 'gradle.properties', 'gradlew', 'gradlew.bat', '.gitignore')
+    from('src') { into 'src' }
+    from('gradle') { into 'gradle' }
+    from('tools') { into 'tools' }
+    from('docs') { into 'docs' }
+}
+assemble.dependsOn 'sourceDistribution'
+tasks.matching { it.name == 'runGameTestServer' }.configureEach {
+    doFirst {
+        if (project.hasProperty('networkSmoke')) {
+            file('run-network-smoke/network-ready.txt').delete()
+            file('run-network-smoke/network-result.txt').delete()
+        }
+    }
+}
+tasks.register('exportClientLaunch') {
+    dependsOn 'prepareRunClient'
+    doLast {
+        def run = tasks.named('runClient').get()
+        def config = run.runConfig.get()
+        def generator = net.minecraftforge.gradle.common.util.runs.RunConfigGenerator
+        def tokens = generator.configureTokensLazy(project, config, generator.mapModClassesToGradle(project, config), run.minecraftArtifacts, run.runtimeClasspathArtifacts)
+        def jvm = (config.jvmArgs + run.additionalClientArgs.get()).collect { config.replace(tokens, it) }
+        def properties = config.properties.collect { key, value -> "-D${key}=${config.replace(tokens, value)}".toString() }
+        def classpath = files(config.allSources.collect { it.runtimeClasspath }).asPath
+        def args = generator.getArgsStream(config, tokens, false).toList()
+        def command = [run.javaLauncher.get().executablePath.asFile.absolutePath, '-Xmx2G'] + jvm + properties +
+                ['-cp', classpath, run.mainClass.get()] + args
+        def modEnvironment = config.environment.collectEntries { key, value -> [key, config.replace(tokens, value)] }
+        file('.tools').mkdirs()
+        file('.tools/client-launch.json').text = groovy.json.JsonOutput.toJson([command: command, environment: modEnvironment])
+    }
+}

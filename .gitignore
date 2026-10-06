@@ -1,0 +1,10 @@
+.gradle/
+build/
+run/
+run-gametest/
+run-network-smoke/
+run-client*/
+.tools/
+.idea/
+*.iml
+*.log

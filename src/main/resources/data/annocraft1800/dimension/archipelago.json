@@ -1,0 +1,9 @@
+{
+  "type": "annocraft1800:archipelago",
+  "generator": {
+    "type": "annocraft1800:archipelago",
+    "region_size": 4096,
+    "island_count": 8,
+    "biome_source": {"type": "minecraft:fixed", "biome": "minecraft:plains"}
+  }
+}
