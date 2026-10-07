@@ -132,9 +132,21 @@ public final class Diplomacy {
                 f.stance = Stance.WAR; colony.event(Colony.Event.of(false, "event.annocraft1800.war_declared", "#faction.annocraft1800." + t.id()));
             }
             if (f.stance == Stance.WAR && random.nextDouble() < dt / 900) raid(colony, t);
+            if (!t.pirate() && !colony.economy().sandbox() && random.nextDouble() < dt / 1500) expand(colony, t);
         }
         // Garrisons recover when nobody besieges them.
         garrison.replaceAll((island, g) -> Math.min(1, g + dt / 600));
+    }
+    /** Rivals settle free islands of the worlds they already hold, three islands at most: the archipelago is contested. */
+    private void expand(Colony colony, FactionType t) {
+        List<String> held = factionIslands(t.id()); if (held.size() >= 3 || held.isEmpty()) return;
+        Set<String> worlds = new HashSet<>(); held.forEach(i -> worlds.add(colony.geography().world(i)));
+        List<String> free = colony.geography().islands().keySet().stream()
+                .filter(i -> !owners.containsKey(i) && !colony.ports().contains(i) && worlds.contains(colony.geography().world(i))).toList();
+        if (free.isEmpty()) return;
+        String island = free.get(random.nextInt(free.size()));
+        owners.put(island, t.id()); garrison.put(island, 1.0);
+        colony.event(Colony.Event.of(false, "event.annocraft1800.island_claimed", "#faction.annocraft1800." + t.id(), island));
     }
     private void raid(Colony colony, FactionType t) {
         List<String> ports = new ArrayList<>(colony.ports()); if (ports.isEmpty()) return;

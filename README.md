@@ -1,6 +1,6 @@
 # AnnoCraft1800
 
-Mod Minecraft de gestion d’archipels, inspiré d’Anno 1800. Minecraft **1.20.1**, Forge **47.4.0**, Java **17**. Mod requis sur le client et le serveur ; aucune dépendance Reign of the Nether ou Continents.
+Mod Minecraft de gestion d’archipels inspiré d’Anno 1800 : îles générées, chaînes de production, cinq strates de population plus deux dans le Nouveau Monde, flotte et routes commerciales, diplomatie, piraterie, conquête et campagne scénarisée, jouables en coopération avec une vue de gestion (RTS) et une vue de visite à la première personne. Minecraft **1.20.1**, Forge **47.4.0**, Java **17**. Mod requis sur le client et le serveur ; aucune dépendance.
 
 ## Essayer
 
@@ -11,80 +11,80 @@ Dans PowerShell, depuis ce dossier :
 ./tools/dev.ps1 client
 ```
 
-Le script utilise `JAVA_HOME`, ou le JDK local dans `.tools/java` lorsqu’il existe. Sur une autre machine, installer un JDK 17 et définir `JAVA_HOME`. Gradle et les dépendances Forge sont téléchargés par le wrapper. Les structures NBT sont déjà incluses. Aucun outil autre que le JDK n’est nécessaire.
+Le script utilise `JAVA_HOME`, ou le JDK local dans `.tools/java`. Gradle et Forge sont téléchargés par le wrapper. Aucun outil autre que le JDK n’est nécessaire.
 
-Créer un monde puis exécuter `/anno join`. **F6** ouvre la gestion. Choisir une construction, déplacer le curseur sur le terrain, **R** pour la rotation et clic gauche pour construire. Clic droit annule. WASD ou les flèches déplacent la caméra ; Q/E la font pivoter et la molette règle le zoom. Cliquer un bâtiment ouvre ses informations, son amélioration disponible et sa démolition. Survoler un bouton du catalogue affiche son coût, son entretien, sa main-d’œuvre et sa production. **F6/Échap** restitue la vue et l’orientation du personnage. Le raccourci F6 est configurable dans les contrôles Minecraft.
+Créer un monde puis `/anno join`. Commandes principales :
 
-Les aperçus affichent l’emprise et les blocs de la véritable structure reçue du serveur. La validation du serveur reste décisive.
+| Touche / commande | Effet |
+| --- | --- |
+| **F6** | Vue de gestion ↔ visite à la première personne (position et orientation restaurées) |
+| **J** | Gestion de la colonie : aperçu, flotte, commerce, diplomatie, campagne |
+| WASD/flèches, Q/E, molette | Déplacer, pivoter, zoomer la caméra |
+| Clic, **R**, clic droit | Construire, pivoter, annuler (l’outil reste actif pour enchaîner) |
+| **C** | Copier le bâtiment sélectionné |
+| Molette sur le catalogue, ‹ › | Défiler, changer de catégorie |
+| `/anno join new_world` | Rejoindre le Nouveau Monde (débloqué) |
+| `/anno leave`, `/anno status` | Quitter l’archipel ; état de la colonie |
+| `/anno campaign start` | Lancer la campagne (aussi depuis l’onglet Campagne) |
+| `/anno sandbox true\|false` | Construction gratuite (opérateurs) |
 
-`/anno leave` ramène dans la dimension, à la position et au mode de jeu précédents. `/anno status` affiche bâtiments, routes, révision de sauvegarde, tickets de caméra actifs, trésor et solde par minute. Les visiteurs jouent en aventure ; les constructions gérées et les routes sont protégées des modifications manuelles, explosions, pistons et placements de fluides.
+Les visiteurs jouent en aventure ; bâtiments gérés et routes sont protégés (casse, explosions, pistons, fluides, piétinement). Des habitants se promènent autour des maisons habitées près des joueurs et des caméras.
 
-## Économie : première boucle paysans–poisson
+## Économie
 
-La colonie démarre avec 5 000 pièces d’or. Fonder une île :
+- **Fonder une île** : un comptoir côtier (500 or) revendique une île libre. Le premier entrepôt de chaque monde reçoit une cargaison fondatrice (30 planches, 10 poissons). Sans bac à sable, aucun autre bâtiment ne se pose sur une île non revendiquée.
+- **Routes** : gratuites, tracées par segments. Un bâtiment produit et une maison se peuple seulement s’ils rejoignent par la route un comptoir ou entrepôt de leur île. En vue de gestion, les bâtiments isolés sont entourés de rouge.
+- **Stocks par île** : 60 places par marchandise et par entrepôt. Une production s’arrête quand son stock est plein ou qu’un intrant manque.
+- **Main-d’œuvre** : chaque strate travaille dans les bâtiments de sa strate ; en cas de pénurie, toutes les productions concernées de l’île ralentissent.
+- **Besoins** : marchandises de base et services (marché, école, université…) ; une maison couverte à 95 % se remplit et peut s’améliorer quand elle est pleine. Le luxe (biens et services) augmente les impôts jusqu’à +50 %. Une alerte prévient quand une île manque d’un bien demandé.
+- **Fertilités et gisements** : chaque île a deux sols (céréales, pommes de terre, houblon, vigne ; bananiers, canne, café, tabac dans le Nouveau Monde) et un ou deux gisements (argile, fer, quartz, charbon ; or). Chaque ressource existe quelle que soit la graine. Le panneau d’île les affiche.
+- **Déblocages** : les bâtiments d’une strate apparaissent dès son premier habitant.
+- **Bonus** : syndicat (+25 %) et centrale électrique au charbon (+100 %) accélèrent les producteurs dans leur rayon.
+- **Finances** : impôts moins entretien des bâtiments et des navires. Coûts prélevés à la construction ; la démolition rend la moitié des matériaux.
 
-1. Construire un **comptoir côtier** (500 or). Le premier entrepôt de la colonie reçoit la cargaison fondatrice : 30 planches et 10 poissons.
-2. Tracer des **routes** (bouton *Route* : clic au départ, puis à chaque angle ; *Retirer* les supprime). Elles sont gratuites. Un bâtiment est relié lorsqu’une route touche son emprise et rejoint un comptoir ou un entrepôt de la même île.
-3. Construire des **résidences de paysans** (2 planches). Chaque maison reliée accueille jusqu’à 10 paysans, qui paient des impôts et consomment du poisson.
-4. Une **pêcherie** côtière (15 paysans) produit du poisson. La **cabane de bûcheron** (5 paysans) produit du bois ; la **scierie** (10 paysans) le transforme en planches.
-5. Une résidence pleine, reliée et approvisionnée peut devenir une **résidence d’ouvriers** (100 or, 4 planches ; 20 habitants, impôts doublés). Les paysans qui partent réduisent la main-d’œuvre disponible.
+Strates : paysans → ouvriers → artisans → ingénieurs → investisseurs (Ancien Monde) ; journaliers → contremaîtres (Nouveau Monde). 68 bâtiments, 45 marchandises : voir `tools/content.txt` ou les infobulles du catalogue.
 
-Règles de simulation (côté serveur, une étape par seconde, indépendante des chunks chargés) :
+## Nouveau Monde, flotte et commerce
 
-- **Stocks par île.** Chaque comptoir ou entrepôt ajoute 60 places par marchandise. Une production s’arrête lorsque sa marchandise est pleine.
-- **Main-d’œuvre.** Les habitants des maisons reliées fournissent la main-d’œuvre de leur île et de leur strate. En cas de pénurie, toutes les productions de l’île ralentissent proportionnellement.
-- **Besoins.** 0,05 poisson par habitant et par minute. Une maison approvisionnée à 95 % se remplit ; sans poisson, sa population tombe à la moitié et ses impôts diminuent. Une maison non reliée garde un seul habitant.
-- **Finances.** Impôts (1 or par paysan et 2 par ouvrier, par minute) moins l’entretien des bâtiments. Les coûts sont prélevés à la construction : l’or sur le trésor commun, les matériaux dans les stocks de l’île. La démolition ne rembourse rien.
+Le Nouveau Monde (`annocraft1800:new_world`) s’ouvre avec le premier artisan ou par la campagne. Le rhum, le café, les cigares et l’or y sont produits et doivent être acheminés vers l’Ancien Monde.
 
-Le panneau en haut à droite montre l’île sous la caméra (ou celle du bâtiment sélectionné) : stock, flux par minute et main-d’œuvre. Le panneau du bâtiment sélectionné indique son statut : en activité, hors réseau routier, main-d’œuvre, intrants, stockage plein ou besoins.
+Un **chantier naval** construit goélettes, clippers, frégates, cargos à vapeur et cuirassés (onglet Flotte). Ordres : route commerciale entre deux îles avec un bien à l’aller et un au retour, déplacement, siège, escorte d’un autre navire, démantèlement. Les voyages sont simulés hors des chunks chargés, entre les deux mondes compris ; les navires apparaissent en mer sous forme de modèles en blocs. Un chantier répare les navires à quai.
 
-Les valeurs (coûts, cycles, besoins, impôts, capacités) sont dans l’objet `economy` des JSON de `data/annocraft1800/annocraft_buildings` et peuvent être remplacées par datapack.
+L’onglet **Commerce** achète et vend auprès des factions qui ne sont pas en guerre ; un accord commercial améliore les prix.
 
-**Bac à sable.** `/anno sandbox true` (opérateur) rend la construction gratuite ; `/anno sandbox false` rétablit les coûts. Les colonies créées avant la version 0.2.0 sont migrées en bac à sable pour rester jouables telles quelles.
+## Diplomatie et conflits
 
-## Coopération
+Trois factions : Lady Ashby (négociante), le Commodore Dravek (militaire) et les Corsaires de la Brume (pirates). Chacune possède des îles, visibles comme de petites villes. Relations de −100 à 100 ; actions : cadeau, guerre, trêve (ou tribut pour les pirates), paix, accord commercial, alliance. Les rivaux colonisent des îles libres, les factions en guerre pillent les ports mal défendus (batteries côtières et navires de guerre à quai les repoussent) et les pirates attaquent les navires marchands non escortés. Des navires de guerre assiégeant une île ennemie finissent par la conquérir ; une faction sans île est vaincue.
 
-Copier `build/libs/annocraft1800-0.2.0.jar` dans `mods` sur un serveur Forge 47.4.0 et sur chaque client. Tous les joueurs rejoignant l’archipel partagent la même colonie, le même trésor, les mêmes stocks et les mêmes droits. La sélection et la caméra restent personnelles. Le protocole réseau 2 refuse les clients en version 0.1.0.
+## Campagne
 
-Pour un serveur de développement : `./tools/dev.ps1 server`. Au premier lancement, Minecraft demande de lire et accepter son EULA dans `run/eula.txt`. Aucune acceptation n’est intégrée au projet. Le serveur de développement utilise l’authentification normale ; utiliser des clients Minecraft authentifiés pour le test réseau à deux joueurs.
+*L’Héritage Valmont* : neuf missions en cinq chapitres, de l’arrivée dans l’archipel au procès de l’oncle usurpateur, en passant par les pirates, le Nouveau Monde, Lady Ashby et la guerre contre Dravek. Dialogues et personnages sont originaux. Les missions sont des données (`data/annocraft1800/annocraft_campaign/*.json`) et leurs textes sont dans les fichiers de langue.
 
 ## Monde et données
 
-La dimension `annocraft1800:archipelago` est distincte de l’Overworld. La graine du monde détermine huit îles séparées, leurs contours, plages planes, fertilités et gisements. Les métadonnées sont enregistrées dès le démarrage du serveur. Les plateaux intérieurs restent plats pour la construction ; caves, minerais exploitables et décorations sont prévus dans les jalons suivants.
+Les dimensions `annocraft1800:archipelago` et `annocraft1800:new_world` comptent huit îles chacune, déterminées par la graine. `region_size` et `island_count` se règlent par datapack avant la création du monde.
 
-Les paramètres `region_size` (4096 par défaut) et `island_count` (8) sont définis dans `data/annocraft1800/dimension/archipelago.json` et peuvent être remplacés par un datapack **avant la création du monde**. Modifier ces paramètres sur un monde existant est refusé pour éviter de dissocier bâtiments et géographie.
+Le contenu est généré : `java tools/GenerateContent.java`, exécuté depuis ce dossier avec le JDK 17, produit à partir de `tools/content.txt` les définitions JSON, les structures `.nbt` originales et les traductions des bâtiments et marchandises. Toutes les valeurs (coûts, cycles, besoins, rayons…) restent remplaçables par datapack.
 
-Les définitions JSON dans `data/annocraft1800/annocraft_buildings` référencent des structures vanilla `.nbt` : comptoir, entrepôt, résidence (et sa variante d’ouvriers), pêcherie, cabane de bûcheron et scierie. `java tools/GenerateStructures.java`, exécuté depuis ce dossier avec le JDK 17, régénère ces assets originaux.
+La colonie est sauvegardée dans `world/data/annocraft1800_colony.dat`, format 3 : bâtiments, routes, économie, flotte, diplomatie, campagne et villes rivales. Les formats 1 et 2 sont migrés ; un format inconnu ou illisible est refusé avant écrasement. Sauvegarder le monde avant toute modification de données.
 
-La colonie est sauvegardée dans `world/data/annocraft1800_colony.dat`, format version 2 : bâtiments, routes (avec le bloc d’origine pour la restauration), trésor, stocks par île et état de chaque bâtiment (habitants, cycle, approvisionnement). Les sauvegardes en version 1 sont migrées au chargement. Les instances conservent identifiants, position, rotation, île, volume et blocs d’origine pour la démolition. Un format inconnu ou illisible est refusé avant que Minecraft puisse le remplacer par une sauvegarde vide. Sauvegarder le monde entier avant toute modification de données ou de datapacks.
-
-Les commandes réseau sont validées sur le thread serveur. Le terrain non chargé n’est pas généré par une commande de construction. Une route mesure au plus 95 blocs par tronçon et ne s’applique qu’entièrement. Chaque caméra dispose de 169 tickets maximum (carré de 13 × 13 chunks), de limites de déplacement et d’une expiration après 100 ticks sans signal. Sortie, changement de dimension, déconnexion et arrêt libèrent ses tickets. Les changements de bâtiments et de routes sont aussi envoyés aux caméras éloignées ; les chunks du personnage sont renvoyés au retour en visite. L’état économique est diffusé toutes les deux secondes dans un paquet distinct, sans les aperçus de structures.
+Le serveur fait autorité : commandes validées sur son thread, terrain non chargé jamais généré par une commande, tickets de caméra bornés et libérés. Le protocole réseau 3 refuse les clients plus anciens. Définitions et aperçus ne sont envoyés qu’à l’arrivée et au rechargement des datapacks ; l’état économique est diffusé toutes les deux secondes.
 
 ## Vérification
 
 ```powershell
 ./tools/dev.ps1 test
 ./tools/dev.ps1 gametest
+./gradlew.bat runClient -PclientSmoke
 ```
 
-JUnit vérifie trois graines, séparation des huit îles, zones constructibles et côtières, indépendance de l’ordre d’exploration, bornes et calculs de caméra. Il simule aussi la boucle économique complète pendant 15 minutes (croissance, poisson, chaîne bois–planches, solde positif), les arrêts de production (route, main-d’œuvre, intrants, stockage), les besoins non satisfaits, les coûts, la séparation des îles et l’aller-retour de sauvegarde.
+- JUnit (21 tests) : géométrie des îles, boucle économique, services, électricité, navires et routes, diplomatie et sièges, raids, campagne, sauvegardes et cohérence de tout le contenu généré.
+- GameTests (6) : constructions concurrentes, rotations, amélioration, démolition, sauvegarde et migration, coûts, routes, protection, taille des paquets, 100 bâtiments avec deux caméras.
+- Test graphique : construction, amélioration, route, synchronisation, dix bascules de caméra, captures du jeu et de chaque onglet de la colonie dans `run-client-smoke/screenshots`.
+- Banc réseau à deux clients : `./gradlew.bat exportClientLaunch -PclientSmoke`, puis `./gradlew.bat runGameTestServer -PnetworkSmoke` et `./tools/network_clients.ps1` ; variante redémarrage avec `-PnetworkReload` (voir `docs/VALIDATION.md`).
 
-Les GameTests lancent Minecraft côté serveur et vérifient constructions concurrentes, quatre rotations, amélioration, démolition, aller-retour de sauvegarde, refus d’un format futur, 100 bâtiments avec deux sessions de caméra, ainsi que coûts en or et en matériaux, refus faute de stock, condition d’amélioration, routes (blocs, protection, chevauchement, longueur, retrait et restauration) et migration de la version 1. Ils sont enregistrés uniquement dans la configuration de test, dans `run-gametest`, séparée du monde de développement.
+## Suite possible
 
-Un test graphique intégré est disponible avec `./gradlew.bat runClient -PclientSmoke` : il crée un monde isolé en bac à sable, teste les clics dans le monde, construction, amélioration, route et réception de l’état économique, dix bascules de caméra, puis ferme le client. Résultat dans `run-client-smoke/smoke-result.txt` et captures dans son dossier `screenshots`.
+Les cinq étapes initiales sont livrées (voir `docs/VALIDATION.md`). Pistes : expéditions, spécialistes et objets, attractivité, charrettes visibles sur les routes, IA rivale qui construit réellement, équilibrage sur des parties longues.
 
-Le banc réseau lance deux vrais clients de développement sur un serveur GameTest avec connexion TCP locale. Après `./gradlew.bat exportClientLaunch -PclientSmoke`, lancer `./gradlew.bat runGameTestServer -PnetworkSmoke` dans un terminal et `./tools/network_clients.ps1` dans un autre. Le serveur écoute uniquement `127.0.0.1:25575`, sans authentification, pour ces clients de test ; cela ne modifie pas la configuration du serveur normal. Les clients et leurs paramètres sont isolés dans `run-client-network-a` et `run-client-network-b`. L’économie de ce banc reste figée pour permettre la comparaison exacte de la sauvegarde.
-
-Pour vérifier le redémarrage et la reconnexion, après ce premier essai et l’arrêt du serveur, copier `run-network-smoke/world/data/annocraft1800_colony.dat` vers `run-network-smoke/network-expected-colony.dat`. Relancer le serveur avec `-PnetworkSmoke -PnetworkReload` puis le script clients. Le serveur compare l’état complet de la colonie sauvegardée avant d’accepter les deux reconnexions.
-
-Les faux joueurs des GameTests couvrent la logique serveur et la charge de 100 bâtiments ; les clients graphiques couvrent le rendu et le transport réseau réel. La checklist dans `docs/ACCEPTANCE.md` complète ces essais par la session utilisateur prolongée.
-
-## Suite du projet
-
-1. ~~Stocks par île, routes, entrepôts, production, besoins, main-d’œuvre et finances ; boucle paysans–poisson.~~ Livré en 0.2.0. Restent à approfondir : transport visible par charrettes et portée des entrepôts, services (marché, taverne), besoins secondaires des paysans, écran de statistiques.
-2. Population jusqu’aux investisseurs, services, chaînes industrielles et Nouveau Monde.
-3. Ports, navires, cargaisons et routes commerciales avec simulation hors chunks chargés.
-4. Diplomatie, pirates, combat naval et conquête.
-5. Campagne adaptée à Minecraft avec dialogues réécrits et assets originaux.
-
-Les DLC sont hors du périmètre initial. Licence GPL-3.0-only ; voir `LICENSE` et `NOTICE.md` pour le réemploi ciblé de Reign of the Nether et l’audit de dépendances. `build/distributions/annocraft1800-0.2.0-source-distribution.zip` contient les sources, tests, ressources, générateur de structures, wrapper et scripts de compilation.
+Licence GPL-3.0-only ; voir `LICENSE` et `NOTICE.md`. `build/distributions/annocraft1800-0.3.0-source-distribution.zip` contient les sources, tests, ressources, générateur, wrapper et scripts.

@@ -189,6 +189,35 @@ public final class RtsController {
         }
         buffers.endBatch(RenderType.lines()); pose.popPose();
     }
+    /** RTS overlays: buildings cut off from the road network, and service or booster radii. */
+    @SubscribeEvent public static void overlays(RenderLevelStageEvent event) {
+        if (!active || event.getStage() != RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS) return;
+        PoseStack pose = event.getPoseStack(); Vec3 camera = event.getCamera().getPosition();
+        pose.pushPose(); pose.translate(-camera.x, -camera.y, -camera.z);
+        var buffers = Minecraft.getInstance().renderBuffers().bufferSource(); var lines = buffers.getBuffer(RenderType.lines());
+        for (BuildingInstance b : ClientState.visible()) {
+            var site = ClientState.SITES.get(b.id()); var def = ClientState.DEFINITIONS.get(b.definition());
+            if (site == null || def == null || site.getBoolean("connected") || def.economy().storageNode()) continue;
+            if (Math.abs(b.origin().getX() - camera.x) > 160 || Math.abs(b.origin().getZ() - camera.z) > 160) continue;
+            LevelRenderer.renderLineBox(pose, lines, new AABB(b.origin().getX() - .05, b.origin().getY(), b.origin().getZ() - .05,
+                    b.origin().getX() + b.width() + .05, b.origin().getY() + .3, b.origin().getZ() + b.depth() + .05), 1, .25f, .2f, 1);
+        }
+        BuildingInstance selected = ClientState.BUILDINGS.get(ClientState.selected);
+        if (placement != null && hover != null) circle(pose, lines, placement, hover.getX() + placement.width(rotation) / 2.0, hover.getY(), hover.getZ() + placement.depth(rotation) / 2.0);
+        else if (selected != null && ClientState.DEFINITIONS.containsKey(selected.definition()))
+            circle(pose, lines, ClientState.DEFINITIONS.get(selected.definition()), selected.origin().getX() + selected.width() / 2.0, selected.origin().getY(), selected.origin().getZ() + selected.depth() / 2.0);
+        buffers.endBatch(RenderType.lines()); pose.popPose();
+    }
+    private static void circle(PoseStack pose, com.mojang.blaze3d.vertex.VertexConsumer lines, BuildingDefinition def, double cx, double y, double cz) {
+        var e = def.economy(); int radius = e.serviceProvider() ? e.radius() : e.booster() ? e.boostRadius() : 0;
+        if (radius <= 0) return;
+        float r = e.booster() ? .4f : .3f, g = e.booster() ? .7f : .9f, b = e.booster() ? 1 : .5f;
+        int segments = Math.max(48, radius * 3);
+        for (int i = 0; i < segments; i++) {
+            double a = Math.PI * 2 * i / segments, x = cx + Math.cos(a) * radius, z = cz + Math.sin(a) * radius;
+            LevelRenderer.renderLineBox(pose, lines, new AABB(x - .15, y + .05, z - .15, x + .15, y + .25, z + .15), r, g, b, .9f);
+        }
+    }
     @SubscribeEvent public static void preview(RenderLevelStageEvent event) {
         if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS && inRegion()) ShipRenderer.render(event);
         if (!active || event.getStage() != RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS) return;

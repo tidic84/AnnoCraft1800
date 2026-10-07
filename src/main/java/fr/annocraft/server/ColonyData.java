@@ -124,7 +124,26 @@ public final class ColonyData extends SavedData implements Colony {
                 || ports().stream().anyMatch(i -> IslandLayout.NEW_WORLD.equals(geography.world(i)));
     }
 
+    private long simulated;
+    private final Map<String, Long> alerts = new HashMap<>();
+    /** Warns every player when an island runs out of a good its residents need (at most every ten minutes per good). */
+    private void shortages() {
+        Map<String, Set<String>> wanted = new TreeMap<>();
+        for (BuildingInstance b : buildings.values()) {
+            EconomyProfile p = profile(b); var s = economy.state(b.id());
+            if (p.housing() && s != null && s.connected) wanted.computeIfAbsent(b.island(), k -> new TreeSet<>()).addAll(p.needs().keySet());
+        }
+        wanted.forEach((island, goods) -> goods.forEach(good -> {
+            String key = island + "/" + good; Long last = alerts.get(key);
+            if (economy.stock(island, good) < 1 && (last == null || simulated - last >= 600)) {
+                alerts.put(key, simulated);
+                event(Event.of(false, "event.annocraft1800.shortage", island, "#good.annocraft1800." + good));
+            }
+        }));
+    }
     public void tickEconomy(double seconds) {
+        simulated += Math.round(seconds);
+        if (simulated % 60 == 0) shortages();
         maritime.step(this, seconds);
         economy.step(sites(), roadTiles(), revision, seconds);
         diplomacy.step(this, seconds);

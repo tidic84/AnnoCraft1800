@@ -51,8 +51,10 @@ public final class IslandLayout {
             double phase = random.nextDouble() * Math.PI * 2;
             // Resources come from a separate stream so island geometry stays identical to earlier versions.
             Random resources = new Random(seed * 31 + i + (old ? 0 : 977));
-            int f = i == 0 ? 0 : resources.nextInt(fertilities.length), d = i == 0 ? 0 : resources.nextInt(deposits.length);
-            String fertility = fertilities[f] + "," + fertilities[(f + 1) % fertilities.length];
+            // The first resource cycles through the pool so every fertility and deposit exists whatever the seed.
+            int f = i % fertilities.length, d = i % deposits.length;
+            int f2 = i == 0 ? 1 : (f + 1 + resources.nextInt(fertilities.length - 1)) % fertilities.length;
+            String fertility = fertilities[f] + "," + fertilities[f2];
             String deposit = deposits[d] + (i == 0 || resources.nextBoolean() ? "," + deposits[(d + 1) % deposits.length] : "");
             result.add(new Island((old ? "island_" : "nw_island_") + (i + 1), x, z, rx, rz, phase, fertility, deposit));
         }

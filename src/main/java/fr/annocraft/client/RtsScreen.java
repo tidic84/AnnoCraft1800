@@ -255,6 +255,17 @@ public final class RtsScreen extends Screen {
         if (key == GLFW.GLFW_KEY_R) { RtsController.rotation = (RtsController.rotation + 1) % 4; return true; }
         if (key == GLFW.GLFW_KEY_F6) { onClose(); return true; }
         if (RtsController.COLONY.matches(key, scan)) { openColony(); return true; }
+        if (key == GLFW.GLFW_KEY_C && ClientState.selected != null) {
+            // Copy: build another of the selected building, starting from its first level.
+            BuildingInstance b = ClientState.BUILDINGS.get(ClientState.selected);
+            BuildingDefinition def = b == null ? null : ClientState.DEFINITIONS.get(b.definition());
+            for (int guard = 0; def != null && def.level() > 1 && guard < 8; guard++) {
+                BuildingDefinition current = def;
+                def = ClientState.DEFINITIONS.values().stream().filter(d -> current.id().equals(d.upgrade())).findFirst().orElse(null);
+            }
+            if (def != null && unlocked(def.economy())) { RtsController.placement = def; RtsController.rotation = b.rotation(); ClientState.selected = null; }
+            return true;
+        }
         return super.keyPressed(key, scan, modifiers);
     }
     @Override public void tick() {

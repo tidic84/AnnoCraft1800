@@ -135,6 +135,7 @@ public final class ServerEvents {
         player.setGameMode(GameType.ADVENTURE);
         player.teleportTo(level, first.x() + .5, 74, first.z() + .5, 0, 0);
         AnnoNetwork.sync(player);
+        player.sendSystemMessage(Component.translatable("message.annocraft1800.welcome", Component.translatable("world.annocraft1800." + AnnoCraft.worldName(world))).withStyle(net.minecraft.ChatFormatting.GOLD));
     }
     private static void leave(ServerPlayer p) {
         if (!AnnoCraft.isColony(p.level().dimension())) return;

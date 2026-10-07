@@ -3,10 +3,10 @@ loaderVersion="[47,)"
 license="GPL-3.0-only"
 [[mods]]
 modId="annocraft1800"
-version="0.2.0"
+version="0.3.0"
 displayName="AnnoCraft1800"
 authors="AnnoCraft1800 contributors"
-description='''Cooperative island city building with RTS and first-person exploration.'''
+description='''Anno-style cooperative colony building: islands, production chains, population tiers, New World, ships, diplomacy and a story campaign, with RTS and first-person views.'''
 [[dependencies.annocraft1800]]
 modId="forge"
 mandatory=true

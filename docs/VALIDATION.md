@@ -2,6 +2,22 @@
 
 Environnement : Windows, Java 17, Minecraft 1.20.1, Forge 47.4.0.
 
+## Version 0.3.0 — les cinq étapes
+
+| Vérification | Résultat |
+| --- | --- |
+| Compilation et JAR reobfusqué `annocraft1800-0.3.0.jar` | Réussi |
+| JUnit : 21 tests (îles, économie, services, électricité, navires, routes commerciales, diplomatie, sièges, raids, campagne, sauvegardes, cohérence du contenu) | Réussi |
+| Cohérence des 68 bâtiments générés : chaque besoin, intrant, coût et service est produit ou fourni ; améliorations compatibles ; fertilités et gisements présents | Réussi |
+| Minecraft GameTest : 6 scénarios, deux dimensions chargées, instantané réseau sous 512 Kio | Réussi |
+| Client graphique (français, échelle 3) : construction, amélioration, route, synchronisation, dix bascules, captures des cinq onglets de la colonie | Réussi |
+| Deux clients graphiques en TCP, protocole 3 (migration d’une sauvegarde v2) | Réussi |
+| Redémarrage, comparaison complète de la sauvegarde v3 et reconnexion des deux clients | Réussi |
+
+Le test graphique a révélé, puis permis de corriger, un instantané dépassant la limite de 1 Mio des paquets (aperçus de structures) : les aperçus sont désormais compactés et un GameTest borne la taille. Un premier passage du banc réseau a échoué par expiration de connexion pendant que la machine était encore chargée par l’essai précédent ; le passage suivant, sur machine libre, a réussi, ainsi que la variante redémarrage.
+
+Non vérifié en partie réelle : l’équilibrage de la progression jusqu’aux investisseurs, la campagne complète, les guerres et conquêtes jouées à la main. Ces mécaniques sont couvertes par la simulation JUnit, pas par une partie prolongée.
+
 ## Version 0.2.0 — économie (boucle paysans–poisson)
 
 | Vérification | Résultat |

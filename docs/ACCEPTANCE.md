@@ -33,3 +33,12 @@ Sur un monde neuf, sans bac à sable (`/anno status` ne doit pas afficher `sandb
 7. Arrêter, redémarrer et reconnecter : trésor, stocks, routes, habitants et cycles identiques à l’arrêt (à quelques secondes de simulation près).
 
 Le jalon ne doit être déclaré entièrement accepté qu’après cette session réseau et visuelle. Les GameTests utilisent des faux joueurs et couvrent la logique serveur, pas le rendu ou le transport réseau réel.
+
+## Progression, flotte, diplomatie et campagne (0.3.0)
+
+1. Monter une île jusqu’aux ouvriers : marché, école, chaînes saucisses et pain. Les bâtiments d’ouvriers apparaissent dans le catalogue au premier ouvrier.
+2. Construire un chantier naval, une goélette, puis une route commerciale entre deux îles avec entrepôt : les stocks bougent sur les deux îles et le navire est visible en mer.
+3. Sans escorte, laisser les Corsaires piller un navire ; payer le tribut et vérifier la fin des attaques ; acheter et vendre à Lady Ashby.
+4. Atteindre les artisans, partir pour le Nouveau Monde (onglet Aperçu), y fonder un comptoir et y produire du rhum ; l’acheminer vers l’Ancien Monde.
+5. Déclarer la guerre à Dravek, assiéger son île avec des frégates ou des cuirassés jusqu’à la conquête ; la ville rivale est rasée quand l’île est chargée.
+6. Lancer la campagne et vérifier dialogues, objectifs et récompenses des premières missions, sur deux clients.
