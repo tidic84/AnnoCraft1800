@@ -21,7 +21,7 @@ public final class ClientState {
     private static long revision = -1;
     public static UUID selected;
     public static void receive(CompoundTag tag) {
-        if (tag == null || tag.getInt("version") != 1 || tag.getLong("revision") < revision) return;
+        if (tag == null || tag.getInt("version") != fr.annocraft.server.ColonyData.VERSION || tag.getLong("revision") < revision) return;
         revision = tag.getLong("revision"); archipelago = tag.getCompound("archipelago").copy(); regionSize = archipelago.getInt("size");
         networkTestReady = tag.getBoolean("test_clients_ready");
         layout = new fr.annocraft.world.IslandLayout(archipelago.getLong("seed"), regionSize, archipelago.getList("islands", Tag.TAG_COMPOUND).size());
@@ -39,13 +39,22 @@ public final class ClientState {
             PREVIEWS.put(d.id(), List.copyOf(blocks));
         }
         for (Tag t : tag.getList("buildings", Tag.TAG_COMPOUND)) { BuildingInstance b = BuildingInstance.fromTag((CompoundTag)t); BUILDINGS.put(b.id(), b); }
+        receiveEconomy(tag.getCompound("economy"));
         if (selected != null && !BUILDINGS.containsKey(selected)) selected = null;
     }
+    public static CompoundTag economy = new CompoundTag();
+    public static final Map<UUID, CompoundTag> SITES = new HashMap<>();
+    public static void receiveEconomy(CompoundTag tag) {
+        if (tag == null) return;
+        economy = tag; SITES.clear();
+        for (Tag t : tag.getList("sites", Tag.TAG_COMPOUND)) { CompoundTag s = (CompoundTag) t; SITES.put(s.getUUID("id"), s); }
+    }
+    public static CompoundTag island(String id) { return economy.getCompound("islands").getCompound(id); }
     public static void feedback(boolean success, String key) {
         message = key; messageSuccess = success;
         Minecraft mc = Minecraft.getInstance();
         if (mc.player != null) mc.player.displayClientMessage(Component.translatable(key).withStyle(success ? net.minecraft.ChatFormatting.GREEN : net.minecraft.ChatFormatting.RED), true);
         if (success) RtsController.placement = null;
     }
-    public static void clear() { DEFINITIONS.clear(); BUILDINGS.clear(); PREVIEWS.clear(); selected = null; revision = -1; archipelago = new CompoundTag(); regionSize = 4096; layout = null; message = ""; networkTestReady = false; }
+    public static void clear() { economy = new CompoundTag(); SITES.clear(); DEFINITIONS.clear(); BUILDINGS.clear(); PREVIEWS.clear(); selected = null; revision = -1; archipelago = new CompoundTag(); regionSize = 4096; layout = null; message = ""; networkTestReady = false; }
 }

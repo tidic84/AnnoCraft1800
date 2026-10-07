@@ -29,12 +29,15 @@ public final class BuildingService {
         StructureTemplate template = template(level, def);
         if (template == null) return Result.fail("missing_structure");
         String island = generator(level).layout().islandAt(origin.getX(), origin.getZ()).orElseThrow().id();
+        String cost = data.economy().checkCost(island, def.economy());
+        if (cost != null) return Result.fail(cost);
         ListTag backup = backup(level, origin, def.width(rotation), def.height(), def.depth(rotation));
         BuildingInstance instance = new BuildingInstance(UUID.randomUUID(), id, origin, rotation, island,
                 def.width(rotation), def.height(), def.depth(rotation), backup);
         if (!placeTemplate(level, template, def, origin, rotation)) {
             restore(level, backup); return Result.fail("placement_failed");
         }
+        data.economy().pay(island, def.economy());
         data.put(instance); CameraSessions.refresh(level, origin, instance.width(), instance.depth()); return Result.ok();
     }
     public static Result demolish(ServerPlayer player, UUID id) {
@@ -52,6 +55,9 @@ public final class BuildingService {
         BuildingDefinition next = current == null || current.upgrade() == null ? null : BuildingDefinitions.get(current.upgrade());
         if (next == null) return Result.fail("no_upgrade");
         if (next.width(old.rotation()) != old.width() || next.depth(old.rotation()) != old.depth()) return Result.fail("invalid_building");
+        if (!data.economy().upgradeReady(old.id(), current.economy())) return Result.fail("upgrade_not_ready");
+        String cost = data.economy().checkCost(old.island(), next.economy());
+        if (cost != null) return Result.fail(cost);
         ServerLevel level = player.serverLevel();
         Result validation = validate(level, data, next, old.origin(), old.rotation(), old.id());
         if (!validation.success()) return validation;
@@ -65,6 +71,7 @@ public final class BuildingService {
         if (!placeTemplate(level, template, next, old.origin(), old.rotation())) {
             restore(level, rollback); return Result.fail("placement_failed");
         }
+        data.economy().pay(old.island(), next.economy());
         data.put(new BuildingInstance(old.id(), next.id(), old.origin(), old.rotation(), old.island(), old.width(), next.height(), old.depth(), originals));
         CameraSessions.refresh(level, old.origin(), old.width(), old.depth());
         return Result.ok();
@@ -78,6 +85,8 @@ public final class BuildingService {
                 || p.getY() < 1 || p.getY() + def.height() >= level.getMaxBuildHeight()) return Result.fail("outside_bounds");
         if (!loaded(level, p, w, d)) return Result.fail("not_loaded");
         for (BuildingInstance b : data.buildings().values()) if (!b.id().equals(except) && b.overlaps(p, w, d)) return Result.fail("overlap");
+        if (except == null) for (int x = 0; x < w; x++) for (int z = 0; z < d; z++)
+            if (data.roadTiles().contains(fr.annocraft.economy.ColonyEconomy.pack(p.getX() + x, p.getZ() + z))) return Result.fail("overlap");
         Optional<IslandLayout.Island> candidate = layout.islandAt(p.getX(), p.getZ());
         if (candidate.isEmpty()) return Result.fail("invalid_terrain");
         IslandLayout.Island island = candidate.get();
@@ -103,7 +112,7 @@ public final class BuildingService {
         }
         return Result.ok();
     }
-    private static boolean loaded(ServerLevel level, BlockPos pos, int w, int d) {
+    static boolean loaded(ServerLevel level, BlockPos pos, int w, int d) {
         for (int x = pos.getX() >> 4; x <= (pos.getX() + w - 1) >> 4; x++)
             for (int z = pos.getZ() >> 4; z <= (pos.getZ() + d - 1) >> 4; z++) if (!level.hasChunk(x, z)) return false;
         return true;
@@ -127,10 +136,10 @@ public final class BuildingService {
         for (int x = 0; x < w; x++) for (int z = 0; z < d; z++) for (int y = 0; y < h; y++) result.add(blockBackup(level, p.offset(x, y, z)));
         return result;
     }
-    private static CompoundTag blockBackup(ServerLevel level, BlockPos p) {
+    static CompoundTag blockBackup(ServerLevel level, BlockPos p) {
         CompoundTag t = new CompoundTag(); t.putLong("pos", p.asLong()); t.put("state", NbtUtils.writeBlockState(level.getBlockState(p))); return t;
     }
-    private static void restore(ServerLevel level, ListTag backup) {
+    static void restore(ServerLevel level, ListTag backup) {
         for (Tag entry : backup) {
             CompoundTag t = (CompoundTag) entry;
             level.setBlock(BlockPos.of(t.getLong("pos")), NbtUtils.readBlockState(level.holderLookup(Registries.BLOCK), t.getCompound("state")), 2);

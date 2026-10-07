@@ -18,7 +18,10 @@ import java.util.*;
 public final class FoundationGameTests {
     private static ServerLevel region(GameTestHelper h) {
         ServerLevel level = Objects.requireNonNull(h.getLevel().getServer().getLevel(AnnoCraft.ARCHIPELAGO));
-        ColonyData.get(level.getServer()).initialize(BuildingService.generator(level).layout()); return level;
+        ColonyData data = ColonyData.get(level.getServer());
+        data.initialize(BuildingService.generator(level).layout());
+        // Foundation scenarios test placement rules, not finances. The economy test disables this synchronously.
+        data.setSandbox(true); return level;
     }
     private static ServerPlayer player(ServerLevel level, String name) {
         return FakePlayerFactory.get(level, new GameProfile(UUID.nameUUIDFromBytes(name.getBytes(java.nio.charset.StandardCharsets.UTF_8)), name));
@@ -98,6 +101,52 @@ public final class FoundationGameTests {
         final BlockPos placed = found;
         BuildingInstance b = ColonyData.get(l.getServer()).buildings().values().stream().filter(v -> v.origin().equals(placed)).findFirst().orElseThrow();
         h.assertTrue(BuildingService.demolish(p, b.id()).success(), "Coastal demolition failed"); h.succeed();
+    }
+    @GameTest(template = "empty", templateNamespace = AnnoCraft.ID, timeoutTicks = 400)
+    public static void economyCostsRoadsAndMigration(GameTestHelper h) {
+        ServerLevel l = region(h); ServerPlayer p = player(l, "economy_tester"); BlockPos at = center(l, 5); load(l, at, 2);
+        ColonyData data = ColonyData.get(l.getServer()); var economy = data.economy();
+        String island = BuildingService.generator(l).layout().islandAt(at.getX(), at.getZ()).orElseThrow().id();
+        // Synchronous section: other GameTests in the batch expect sandbox mode between ticks.
+        data.setSandbox(false);
+        try {
+            economy.addStock(island, "timber", -economy.stock(island, "timber"));
+            var refused = BuildingService.place(p, AnnoCraft.id("residence"), at, 0);
+            h.assertTrue(!refused.success() && refused.message().endsWith("no_goods"), "Residence built without timber: " + refused.message());
+            economy.addStock(island, "timber", 10);
+            double coins = economy.coins();
+            h.assertTrue(BuildingService.place(p, AnnoCraft.id("residence"), at, 0).success(), "Paid residence placement failed");
+            h.assertTrue(Math.abs(economy.stock(island, "timber") - 8) < 1e-9, "Residence timber cost not deducted");
+            BlockPos hut = at.offset(10, 0, 0);
+            h.assertTrue(BuildingService.place(p, AnnoCraft.id("lumberjack"), hut, 0).success(), "Lumberjack placement failed");
+            h.assertTrue(Math.abs(economy.coins() - (coins - 50)) < 1e-9, "Lumberjack coin cost not deducted");
+            BuildingInstance house = data.buildings().values().stream().filter(v -> v.origin().equals(at)).findFirst().orElseThrow();
+            var early = BuildingService.upgrade(p, house.id());
+            h.assertTrue(!early.success() && early.message().endsWith("upgrade_not_ready"), "Unfilled residence upgraded: " + early.message());
+
+            BlockPos from = new BlockPos(at.getX() - 1, 0, at.getZ()), to = new BlockPos(at.getX() - 1, 0, at.getZ() + 14);
+            h.assertTrue(RoadService.place(p, from, to).success(), "Road placement failed");
+            BlockPos ground = new BlockPos(at.getX() - 1, 73, at.getZ() + 3);
+            h.assertTrue(data.road(ground) && l.getBlockState(ground).is(net.minecraft.world.level.block.Blocks.DIRT_PATH), "Road block missing");
+            h.assertTrue(data.roads().size() == 15, "Road length incorrect: " + data.roads().size());
+            var event = new net.minecraftforge.event.level.BlockEvent.BreakEvent(l, ground, l.getBlockState(ground), p);
+            net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(event);
+            h.assertTrue(event.isCanceled(), "Road could be broken manually");
+            var blocked = BuildingService.place(p, AnnoCraft.id("residence"), new BlockPos(at.getX() - 4, 74, at.getZ() + 12), 0);
+            h.assertTrue(!blocked.success() && blocked.message().endsWith("overlap"), "Residence accepted over a road: " + blocked.message());
+            h.assertFalse(RoadService.place(p, from, new BlockPos(at.getX() - 1, 0, at.getZ() + RoadService.MAX_LENGTH)).success(), "Overlong road accepted");
+
+            CompoundTag saved = data.save(new CompoundTag());
+            h.assertTrue(ColonyData.load(saved).save(new CompoundTag()).equals(saved), "Economy or roads changed during save round trip");
+            CompoundTag legacy = saved.copy(); legacy.putInt("version", 1); legacy.remove("economy"); legacy.remove("roads");
+            ColonyData migrated = ColonyData.load(legacy);
+            h.assertTrue(migrated.economy().sandbox() && migrated.buildings().keySet().equals(data.buildings().keySet()), "Version 1 migration lost buildings or budget mode");
+
+            h.assertTrue(RoadService.remove(p, from, to).success(), "Road removal failed");
+            h.assertTrue(data.roads().isEmpty() && l.getBlockState(ground).is(net.minecraft.world.level.block.Blocks.GRASS_BLOCK), "Road removal did not restore terrain");
+            for (BuildingInstance b : List.copyOf(data.buildings().values())) if (b.origin().equals(at) || b.origin().equals(hut)) BuildingService.demolish(p, b.id());
+        } finally { data.setSandbox(true); }
+        h.succeed();
     }
     @GameTest(template = "empty", templateNamespace = AnnoCraft.ID, timeoutTicks = 800)
     public static void hundredBuildingsAndTwoCameraSessions(GameTestHelper h) {

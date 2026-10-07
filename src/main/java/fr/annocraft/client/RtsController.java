@@ -23,6 +23,9 @@ public final class RtsController {
     public static boolean active;
     public static BuildingDefinition placement;
     public static int rotation;
+    /** 0: none, 1: build roads, 2: remove roads. */
+    public static int roadMode;
+    public static BlockPos roadStart;
     public static double x, z;
     public static float yaw = 135, zoom = CameraMath.DEFAULT_ZOOM;
     private static Entity anchor;
@@ -63,7 +66,7 @@ public final class RtsController {
         mc.setCameraEntity(previousCamera != null && previousCamera.level() == mc.level ? previousCamera : mc.player);
         if (previousPerspective != null) mc.options.setCameraType(previousPerspective);
         mc.options.hideGui = previousHideGui;
-        active = false; anchor = null; previousCamera = null; previousPerspective = null; placement = null; hover = null;
+        active = false; anchor = null; previousCamera = null; previousPerspective = null; placement = null; hover = null; roadMode = 0; roadStart = null;
         KeyMapping.releaseAll();
     }
     private static double[] forward() {
@@ -131,6 +134,7 @@ public final class RtsController {
         BlockHitResult hit = mc.level.clip(new ClipContext(start, start.add(ray.scale(400)), ClipContext.Block.OUTLINE, ClipContext.Fluid.ANY, anchor));
         if (hit.getType() != HitResult.Type.BLOCK) return;
         BlockPos ground = hit.getBlockPos();
+        if (roadMode != 0) { hover = ground; hoverValid = true; return; }
         if (placement == null) { hover = ground; return; }
         hover = ground.above(); hoverValid = previewValid(hover, placement);
     }
@@ -156,12 +160,32 @@ public final class RtsController {
     }
     public static void clickWorld() {
         if (hover == null) return;
+        if (roadMode != 0) {
+            if (roadStart == null) { roadStart = hover; return; }
+            AnnoNetwork.CHANNEL.sendToServer(new AnnoNetwork.RoadCommand(roadMode == 2, roadStart, hover));
+            roadStart = roadMode == 1 ? hover : null; return;
+        }
         if (placement != null) {
             AnnoNetwork.CHANNEL.sendToServer(new AnnoNetwork.BuildCommand(0, placement.id(), hover, rotation, new java.util.UUID(0, 0)));
         } else ClientState.selected = ClientState.BUILDINGS.values().stream().filter(b -> b.contains(hover)).map(BuildingInstance::id).findFirst().orElse(null);
     }
+    private static void roadPreview(RenderLevelStageEvent event) {
+        if (hover == null) return;
+        BlockPos from = roadStart == null ? hover : roadStart;
+        boolean tooLong = Math.abs(hover.getX() - from.getX()) + Math.abs(hover.getZ() - from.getZ()) >= fr.annocraft.server.RoadService.MAX_LENGTH;
+        float r = roadMode == 2 || tooLong ? 1 : .95f, g = roadMode == 2 || tooLong ? .25f : .8f, b = .2f;
+        PoseStack pose = event.getPoseStack(); Vec3 camera = event.getCamera().getPosition();
+        pose.pushPose(); pose.translate(-camera.x, -camera.y, -camera.z);
+        var buffers = Minecraft.getInstance().renderBuffers().bufferSource(); var lines = buffers.getBuffer(RenderType.lines());
+        for (int[] t : fr.annocraft.server.RoadService.path(from.getX(), from.getZ(), hover.getX(), hover.getZ())) {
+            int y = ClientState.layout == null ? hover.getY() : ClientState.layout.height(t[0], t[1]);
+            LevelRenderer.renderLineBox(pose, lines, new AABB(t[0], y + 1.01, t[1], t[0] + 1, y + 1.05, t[1] + 1), r, g, b, .9f);
+        }
+        buffers.endBatch(RenderType.lines()); pose.popPose();
+    }
     @SubscribeEvent public static void preview(RenderLevelStageEvent event) {
         if (!active || event.getStage() != RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS) return;
+        if (roadMode != 0) { roadPreview(event); return; }
         BuildingInstance selected = ClientState.BUILDINGS.get(ClientState.selected);
         BlockPos p; int w, h, d; boolean valid;
         if (placement != null && hover != null) { p = hover; w = placement.width(rotation); h = placement.height(); d = placement.depth(rotation); valid = hoverValid; }

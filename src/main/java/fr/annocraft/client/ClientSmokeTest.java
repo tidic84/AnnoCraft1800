@@ -24,6 +24,7 @@ public final class ClientSmokeTest {
     private static int stage, elapsed, total, toggles;
     private static Vec3 body;
     private static UUID residence;
+    private static boolean roadSent;
     private static void next() { stage++; elapsed = 0; System.out.println("ANNOCRAFT_CLIENT_SMOKE_STAGE " + stage); }
     private static void check(boolean condition, String message) { if (!condition) throw new IllegalStateException(message); }
     private static void clickAt(Vec3 target) {
@@ -102,8 +103,15 @@ public final class ClientSmokeTest {
                 }
                 case 5 -> {
                     BuildingInstance b = ClientState.BUILDINGS.get(residence);
-                    if (b != null && b.definition().equals(AnnoCraft.id("residence_2")) && elapsed > 20) {
+                    if (b != null && b.definition().equals(AnnoCraft.id("residence_2")) && elapsed > 20 && !roadSent) {
+                        // Road along the residence's west side, through the real network command.
+                        AnnoNetwork.CHANNEL.sendToServer(new AnnoNetwork.RoadCommand(false, b.origin().offset(-1, 0, 0), b.origin().offset(-1, 0, 6))); roadSent = true; elapsed = 0;
+                        ClientState.selected = b.id();
+                    }
+                    BlockPos road = b == null ? null : new BlockPos(b.origin().getX() - 1, ClientState.layout.height(b.origin().getX() - 1, b.origin().getZ() + 3), b.origin().getZ() + 3);
+                    if (roadSent && elapsed > 20 && road != null && mc.level.getBlockState(road).is(net.minecraft.world.level.block.Blocks.DIRT_PATH)) {
                         check(mc.level.getBlockState(b.origin()).is(net.minecraft.world.level.block.Blocks.STONE_BRICKS), "Network did not update construction blocks");
+                        check(ClientState.economy.contains("coins") && ClientState.SITES.containsKey(b.id()), "Economy state was not received");
                         Screenshot.grab(mc.gameDirectory, "annocraft-rts.png", mc.getMainRenderTarget(), c -> {});
                         RtsController.exit(); mc.setScreen(null); next();
                     }
@@ -122,7 +130,7 @@ public final class ClientSmokeTest {
                     if (elapsed > 20) {
                         check(!RtsController.active && mc.getCameraEntity() == mc.player, "Player camera was not restored");
                         Screenshot.grab(mc.gameDirectory, "annocraft-visit.png", mc.getMainRenderTarget(), c -> {});
-                        Files.writeString(mc.gameDirectory.toPath().resolve("smoke-result.txt"), "PASS: client boot, world creation, archipelago join, RTS, network construction and upgrade, 10 toggles, body restoration.\n");
+                        Files.writeString(mc.gameDirectory.toPath().resolve("smoke-result.txt"), "PASS: client boot, world creation, archipelago join, RTS, network construction, upgrade and road, economy sync, 10 toggles, body restoration.\n");
                         System.out.println("ANNOCRAFT_CLIENT_SMOKE_PASS"); next();
                         if (System.getProperty("annocraft1800.networkRole") != null) mc.player.connection.sendCommand("anno_test_report");
                     }

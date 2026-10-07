@@ -1,1 +1,2 @@
-{"name":"building.annocraft1800.warehouse","structure":"annocraft1800:warehouse","width":11,"height":8,"depth":9,"coastal":false,"level":1}
+{"name":"building.annocraft1800.warehouse","structure":"annocraft1800:warehouse","width":11,"height":8,"depth":9,"coastal":false,"level":1,
+  "economy":{"cost":{"coins":200,"timber":4},"upkeep":5,"storage":60}}

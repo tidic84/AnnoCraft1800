@@ -1,0 +1,3 @@
+{"name":"building.annocraft1800.sawmill","structure":"annocraft1800:sawmill","width":9,"height":7,"depth":7,"coastal":false,"level":1,
+  "economy":{"cost":{"coins":100,"timber":2},"upkeep":10,"workforce":{"tier":"farmers","amount":10},
+    "production":{"cycle":15,"inputs":{"wood":1},"outputs":{"timber":1}}}}

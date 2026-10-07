@@ -4,6 +4,7 @@ import fr.annocraft.AnnoCraft;
 import fr.annocraft.building.BuildingInstance;
 import fr.annocraft.network.AnnoNetwork;
 import fr.annocraft.world.*;
+import com.mojang.brigadier.arguments.BoolArgumentType;
 import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
@@ -39,7 +40,12 @@ public final class ServerEvents {
         if (level == null || !(level.getChunkSource().getGenerator() instanceof ArchipelagoGenerator))
             throw new IllegalStateException("AnnoCraft archipelago dimension missing or generator invalid");
         IslandLayout layout = BuildingService.generator(level).layout();
-        ColonyData.get(event.getServer()).initialize(layout);
+        ColonyData colony = ColonyData.get(event.getServer());
+        colony.initialize(layout);
+        // Graphical smoke benches exercise construction and rendering, not finances.
+        if (Boolean.getBoolean("annocraft1800.clientSmoke") || Boolean.getBoolean("annocraft1800.networkSmoke")) colony.setSandbox(true);
+        // Gives the graphical smoke test island stock lines to render.
+        if (Boolean.getBoolean("annocraft1800.clientSmoke") && colony.economy().stock(layout.islands().get(0).id(), "fish") == 0) { colony.economy().addStock(layout.islands().get(0).id(), "fish", 12); colony.economy().addStock(layout.islands().get(0).id(), "timber", 30); }
         level.getWorldBorder().setCenter(0, 0); level.getWorldBorder().setSize(layout.size());
         IslandLayout.Island island = layout.islands().get(0);
         level.setDefaultSpawnPos(new BlockPos(island.x(), 74, island.z()), 0);
@@ -54,8 +60,26 @@ public final class ServerEvents {
                 .then(Commands.literal("leave").executes(ctx -> { leave(ctx.getSource().getPlayerOrException()); return 1; }))
                 .then(Commands.literal("status").executes(ctx -> {
                     ColonyData data = ColonyData.get(ctx.getSource().getServer());
-                    ctx.getSource().sendSuccess(() -> Component.literal("AnnoCraft: " + data.buildings().size() + " buildings, revision " + data.revision() + ", camera tickets " + CameraSessions.ticketCount()), false); return 1;
-                })));
+                    var e = data.economy();
+                    ctx.getSource().sendSuccess(() -> Component.literal("AnnoCraft: " + data.buildings().size() + " buildings, " + data.roads().size() + " roads, revision " + data.revision()
+                            + ", camera tickets " + CameraSessions.ticketCount() + ", coins " + (long) e.coins() + " (" + Math.round(e.incomePerMinute() - e.upkeepPerMinute()) + "/min)"
+                            + (e.sandbox() ? ", sandbox" : "")), false); return 1;
+                }))
+                .then(Commands.literal("sandbox").requires(source -> source.hasPermission(2))
+                        .then(Commands.argument("enabled", BoolArgumentType.bool()).executes(ctx -> {
+                            boolean enabled = BoolArgumentType.getBool(ctx, "enabled");
+                            ColonyData.get(ctx.getSource().getServer()).setSandbox(enabled);
+                            AnnoNetwork.syncEconomy(ctx.getSource().getServer());
+                            ctx.getSource().sendSuccess(() -> Component.translatable(enabled ? "message.annocraft1800.sandbox_on" : "message.annocraft1800.sandbox_off"), true); return 1;
+                        }))));
+    }
+    @SubscribeEvent public static void serverTick(TickEvent.ServerTickEvent event) {
+        // The network smoke bench compares the complete save across a restart: keep its economy frozen.
+        if (event.phase != TickEvent.Phase.END || Boolean.getBoolean("annocraft1800.networkSmoke")) return;
+        var server = event.getServer();
+        if (server.getTickCount() % 20 != 0 || server.getLevel(AnnoCraft.ARCHIPELAGO) == null) return;
+        ColonyData.get(server).tickEconomy(1);
+        if (server.getTickCount() % 40 == 0) AnnoNetwork.syncEconomy(server);
     }
     public static void join(ServerPlayer player) {
         if (player.level().dimension().equals(AnnoCraft.ARCHIPELAGO)) { AnnoNetwork.sync(player); return; }
@@ -101,7 +125,8 @@ public final class ServerEvents {
     }
     private static boolean protectedAt(LevelAccessor world, BlockPos pos) {
         if (!(world instanceof ServerLevel level) || !level.dimension().equals(AnnoCraft.ARCHIPELAGO)) return false;
-        return ColonyData.get(level.getServer()).buildings().values().stream().anyMatch(b -> b.contains(pos));
+        ColonyData data = ColonyData.get(level.getServer());
+        return data.road(pos) || data.buildings().values().stream().anyMatch(b -> b.contains(pos));
     }
     @SubscribeEvent public static void breaking(BlockEvent.BreakEvent event) {
         if (protectedAt(event.getLevel(), event.getPos())) event.setCanceled(true);
