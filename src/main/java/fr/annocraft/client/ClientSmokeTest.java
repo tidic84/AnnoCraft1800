@@ -25,11 +25,12 @@ public final class ClientSmokeTest {
     private static Vec3 body;
     private static UUID residence;
     private static boolean roadSent;
+    private static boolean buildShot;
     private static void next() { stage++; elapsed = 0; System.out.println("ANNOCRAFT_CLIENT_SMOKE_STAGE " + stage); }
     private static void check(boolean condition, String message) { if (!condition) throw new IllegalStateException(message); }
     private static void clickAt(Vec3 target) {
         Minecraft mc = Minecraft.getInstance(); Vec3 delta = target.subtract(mc.gameRenderer.getMainCamera().getPosition());
-        double yaw = Math.toRadians(RtsController.yaw), pitch = Math.toRadians(55);
+        double yaw = Math.toRadians(RtsController.yaw), pitch = Math.toRadians(CameraMath.pitch(RtsController.zoom));
         Vec3 forward = new Vec3(-Math.sin(yaw) * Math.cos(pitch), -Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch));
         Vec3 right = forward.cross(new Vec3(0, 1, 0)).normalize(), up = right.cross(forward).normalize();
         double w = mc.getWindow().getGuiScaledWidth(), h = mc.getWindow().getGuiScaledHeight();
@@ -72,7 +73,7 @@ public final class ClientSmokeTest {
                 case 2 -> {
                     if (RtsController.inRegion() && !ClientState.DEFINITIONS.isEmpty() && elapsed > 20 &&
                             (System.getProperty("annocraft1800.networkRole") == null || ClientState.networkTestReady)) {
-                        body = mc.player.position(); mc.setScreen(null); RtsController.enter();
+                        body = mc.player.position(); mc.setScreen(null); RtsScreen.openCategory = null; RtsController.enter();
                         check(RtsController.active && mc.screen instanceof RtsScreen, "RTS did not activate"); next();
                     }
                 }
@@ -100,7 +101,7 @@ public final class ClientSmokeTest {
                         RtsController.placement = null;
                         residence = ClientState.BUILDINGS.keySet().iterator().next();
                         var building = ClientState.BUILDINGS.get(residence);
-                        clickAt(new Vec3(building.origin().getX() + building.width() / 2.0, building.origin().getY() + building.height() - .5, building.origin().getZ() + building.depth() / 2.0));
+                        clickAt(new Vec3(building.origin().getX() + building.width() / 2.0, building.origin().getY() + .5, building.origin().getZ() + building.depth() / 2.0));
                         check(residence.equals(ClientState.selected), "Cursor did not select the shared building");
                         if (!building.definition().equals(AnnoCraft.id("residence_2"))) AnnoNetwork.CHANNEL.sendToServer(new AnnoNetwork.BuildCommand(2, AnnoCraft.id("residence"), BlockPos.ZERO, 0, residence));
                         next();
@@ -114,10 +115,18 @@ public final class ClientSmokeTest {
                         ClientState.selected = b.id();
                     }
                     BlockPos road = b == null ? null : new BlockPos(b.origin().getX() - 1, ClientState.layout.height(b.origin().getX() - 1, b.origin().getZ() + 3), b.origin().getZ() + 3);
-                    if (roadSent && elapsed > 20 && road != null && mc.level.getBlockState(road).is(net.minecraft.world.level.block.Blocks.DIRT_PATH)) {
+                    if (!buildShot && roadSent && elapsed > 20 && road != null && mc.level.getBlockState(road).is(net.minecraft.world.level.block.Blocks.DIRT_PATH)) {
                         check(mc.level.getBlockState(b.origin()).is(net.minecraft.world.level.block.Blocks.STONE_BRICKS), "Network did not update construction blocks");
                         check(ClientState.economy.contains("coins") && ClientState.SITES.containsKey(b.id()), "Economy state was not received");
                         Screenshot.grab(mc.gameDirectory, "annocraft-rts.png", mc.getMainRenderTarget(), c -> {});
+                        // Then the construction menu and the ghost of a building being placed.
+                        buildShot = true; elapsed = 0; ClientState.selected = null;
+                        RtsScreen.openCategory = "housing"; mc.screen.init(mc, mc.getWindow().getGuiScaledWidth(), mc.getWindow().getGuiScaledHeight());
+                        RtsController.placement = ClientState.DEFINITIONS.get(AnnoCraft.id("residence"));
+                        RtsController.forceHover(b.origin().offset(-12, 0, 0));
+                    } else if (buildShot && elapsed == 15) Screenshot.grab(mc.gameDirectory, "annocraft-build.png", mc.getMainRenderTarget(), c -> {});
+                    else if (buildShot && elapsed > 20) {
+                        RtsController.forceHover(null); RtsController.placement = null; RtsScreen.openCategory = null;
                         RtsController.exit(); mc.setScreen(null); next();
                     }
                 }
@@ -147,6 +156,8 @@ public final class ClientSmokeTest {
                     if (elapsed == 1) AnnoNetwork.action("campaign_start");
                     if (index < ColonyScreen.TABS.length && elapsed % 30 == 5) { ColonyScreen.tab = ColonyScreen.TABS[index]; mc.setScreen(new ColonyScreen(null)); }
                     if (index < ColonyScreen.TABS.length && elapsed % 30 == 28) Screenshot.grab(mc.gameDirectory, "colony-" + ColonyScreen.tab + ".png", mc.getMainRenderTarget(), c -> {});
+                    if (index == ColonyScreen.TABS.length && elapsed % 30 == 5) mc.setScreen(new StrategicMapScreen(null));
+                    if (index == ColonyScreen.TABS.length && elapsed % 30 == 28) Screenshot.grab(mc.gameDirectory, "strategic-map.png", mc.getMainRenderTarget(), c -> {});
                     if (index > ColonyScreen.TABS.length) mc.stop();
                 }
             }

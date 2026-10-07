@@ -55,7 +55,7 @@ class IslandLayoutTest {
         assertNotEquals(l.islands(), new IslandLayout(1, 4096, 8).islands());
     }
     @Test void cameraMathClampsZoomAndPreservesPanLength() {
-        assertEquals(10, CameraMath.zoom(-100)); assertEquals(90, CameraMath.zoom(200));
+        assertEquals(CameraMath.MIN_ZOOM, CameraMath.zoom(-100)); assertEquals(CameraMath.MAX_ZOOM, CameraMath.zoom(500));
         double[] v = CameraMath.rotateCoords(3, 4, 137);
         assertEquals(5, Math.hypot(v[0], v[1]), 1e-9);
         double[] back = CameraMath.rotateCoords(v[0], v[1], -137);

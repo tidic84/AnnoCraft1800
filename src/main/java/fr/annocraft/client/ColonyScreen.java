@@ -25,9 +25,8 @@ public final class ColonyScreen extends Screen {
         int w = (width - 16) / TABS.length;
         for (int i = 0; i < TABS.length; i++) {
             String id = TABS[i];
-            Button b = addRenderableWidget(Button.builder(Component.translatable("colony.annocraft1800.tab." + id), x -> { tab = id; rebuild(); })
-                    .bounds(8 + i * w, 4, w - 2, 14).build());
-            b.active = !id.equals(tab);
+            addRenderableWidget(new UiKit.AnnoButton(8 + i * w, 4, w - 2, 14, Component.translatable("colony.annocraft1800.tab." + id), null, () -> { tab = id; rebuild(); })
+                    .highlight(() -> id.equals(tab)));
         }
         switch (tab) {
             case "overview" -> overviewWidgets();
@@ -38,8 +37,8 @@ public final class ColonyScreen extends Screen {
         }
     }
     private void rebuild() { clearWidgets(); init(); }
-    private Button button(Component label, int x, int y, int w, Runnable action) {
-        return addRenderableWidget(Button.builder(label, b -> { action.run(); rebuild(); }).bounds(x, y, w, 14).build());
+    private AbstractButton button(Component label, int x, int y, int w, Runnable action) {
+        return addRenderableWidget(new UiKit.AnnoButton(x, y, w, 14, label, null, () -> { action.run(); rebuild(); }));
     }
     private static int cycle(int index, int size) { return size == 0 ? 0 : (index + 1) % size; }
     private static <T> T pick(List<T> list, int index) { return list.isEmpty() ? null : list.get(Math.floorMod(index, list.size())); }
@@ -91,7 +90,7 @@ public final class ColonyScreen extends Screen {
     private void overviewWidgets() {
         boolean open = ClientState.economy.getBoolean("new_world_open");
         boolean inNew = IslandLayout.NEW_WORLD.equals(ClientState.world);
-        Button travel = button(Component.translatable(inNew ? "colony.annocraft1800.travel_old" : "colony.annocraft1800.travel_new"), 8, height - 20, 150,
+        AbstractButton travel = button(Component.translatable(inNew ? "colony.annocraft1800.travel_old" : "colony.annocraft1800.travel_new"), 8, height - 20, 150,
                 () -> AnnoNetwork.action("travel", "world", inNew ? IslandLayout.OLD_WORLD : IslandLayout.NEW_WORLD));
         travel.active = inNew || open;
         if (!open && !inNew) travel.setTooltip(Tooltip.create(Component.translatable("message.annocraft1800.new_world_locked")));
@@ -101,16 +100,16 @@ public final class ColonyScreen extends Screen {
         for (CompoundTag s : ships()) {
             if (y > height - 30) break;
             UUID id = s.getUUID("id");
-            Button b = button(Component.literal(s.getString("name")), x, y, 110, () -> ship = id);
+            AbstractButton b = button(Component.literal(s.getString("name")), x, y, 110, () -> ship = id);
             b.active = !id.equals(ship); y += 16;
         }
         int rx = 124, cw = (width - rx - 8) / 3;
         List<String> yards = shipyards();
         Maritime.ShipType t = Maritime.TYPES.get(Math.floorMod(type, Maritime.TYPES.size()));
-        Button typeButton = button(Component.translatable("ship.annocraft1800." + t.id()), rx, 24, cw - 2, () -> type = cycle(type, Maritime.TYPES.size()));
+        AbstractButton typeButton = button(Component.translatable("ship.annocraft1800." + t.id()), rx, 24, cw - 2, () -> type = cycle(type, Maritime.TYPES.size()));
         typeButton.setTooltip(Tooltip.create(shipTooltip(t)));
         button(yards.isEmpty() ? Component.translatable("colony.annocraft1800.no_shipyard") : islandLabel(pick(yards, yard)), rx + cw, 24, cw - 2, () -> yard = cycle(yard, yards.size()));
-        Button build = button(Component.translatable("colony.annocraft1800.build_ship"), rx + 2 * cw, 24, cw - 2,
+        AbstractButton build = button(Component.translatable("colony.annocraft1800.build_ship"), rx + 2 * cw, 24, cw - 2,
                 () -> AnnoNetwork.action("ship_build", "island", pick(yards, yard), "type", t.id()));
         build.active = !yards.isEmpty();
         CompoundTag s = selectedShip();
@@ -125,7 +124,7 @@ public final class ColonyScreen extends Screen {
         oy += 16;
         button(Component.translatable("colony.annocraft1800.route_a", islandLabel(pick(ports, from))), rx, oy, cw - 2, () -> from = cycle(from, ports.size()));
         button(Component.translatable("colony.annocraft1800.route_b", islandLabel(pick(ports, to))), rx + cw, oy, cw - 2, () -> to = cycle(to, ports.size()));
-        Button route = button(Component.translatable("colony.annocraft1800.route_create"), rx + 2 * cw, oy, cw - 2,
+        AbstractButton route = button(Component.translatable("colony.annocraft1800.route_create"), rx + 2 * cw, oy, cw - 2,
                 () -> AnnoNetwork.action("ship_route", "ship", id, "a", pick(ports, from), "b", pick(ports, to),
                         "out", out == 0 ? "" : goods.get(out - 1), "back", back == 0 ? "" : goods.get(back - 1)));
         route.active = ports.size() >= 2;
@@ -137,7 +136,7 @@ public final class ColonyScreen extends Screen {
         oy += 16;
         button(Component.translatable("colony.annocraft1800.protect", protectedShip == null ? Component.translatable("colony.annocraft1800.none") : Component.literal(protectedShip.getString("name"))),
                 rx, oy, cw - 2, () -> escort = cycle(escort, others.size()));
-        Button escortButton = button(Component.translatable("colony.annocraft1800.escort"),
+        AbstractButton escortButton = button(Component.translatable("colony.annocraft1800.escort"),
                 rx + cw, oy, cw - 2, () -> {
                     if (protectedShip != null) AnnoNetwork.action("ship_escort", "ship", id, "target", protectedShip.getUUID("id"));
                 });
@@ -162,9 +161,9 @@ public final class ColonyScreen extends Screen {
         button(Component.literal("›"), 8 + 3 * cw - 16, y, 14, () -> good = cycle(good, goods.size()));
         y = 74;
         for (int amount : new int[]{10, 50}) {
-            Button buy = button(Component.translatable("colony.annocraft1800.buy", amount), 8, y, cw - 2,
+            AbstractButton buy = button(Component.translatable("colony.annocraft1800.buy", amount), 8, y, cw - 2,
                     () -> AnnoNetwork.action("trade_buy", "faction", f, "island", island, "good", g, "amount", amount));
-            Button sell = button(Component.translatable("colony.annocraft1800.sell", amount), 8 + cw, y, cw - 2,
+            AbstractButton sell = button(Component.translatable("colony.annocraft1800.sell", amount), 8 + cw, y, cw - 2,
                     () -> AnnoNetwork.action("trade_sell", "faction", f, "island", island, "good", g, "amount", amount));
             boolean ok = island != null && faction(f).getString("stance").length() > 0 && !"WAR".equals(faction(f).getString("stance")) && !faction(f).getBoolean("eliminated");
             buy.active = sell.active = ok;
@@ -181,9 +180,20 @@ public final class ColonyScreen extends Screen {
                     : new String[][]{{"gift", "gift"}, {"war", "war"}, {"ceasefire", "ceasefire"}, {"peace", "peace"}, {"trade", "trade_treaty"}, {"alliance", "alliance"}};
             for (int i = 0; i < actions.length; i++) {
                 String action = actions[i][0];
-                Button b = button(Component.translatable("colony.annocraft1800." + actions[i][1]), 8 + i * cw, y + 22, cw - 2,
+                AbstractButton b = button(Component.translatable("colony.annocraft1800." + actions[i][1]), 8 + i * cw, y + 22, cw - 2,
                         () -> AnnoNetwork.action("diplomacy", "faction", f, "action", action));
-                b.active = !dead;
+                String stance = c.getString("stance"); double rel = c.getDouble("relation");
+                // Mirrors the server rules so impossible proposals are greyed out with their condition.
+                boolean possible = switch (action) {
+                    case "war" -> !stance.equals("WAR");
+                    case "ceasefire" -> stance.equals("WAR") && (pirate || rel >= -50);
+                    case "peace" -> !pirate && (stance.equals("WAR") || stance.equals("CEASEFIRE")) && rel >= 0;
+                    case "trade" -> stance.equals("PEACE") && rel >= 30;
+                    case "alliance" -> stance.equals("TRADE") && rel >= 70;
+                    default -> true;
+                };
+                b.active = !dead && possible;
+                b.setTooltip(Tooltip.create(Component.translatable("colony.annocraft1800.help." + (pirate && action.equals("ceasefire") ? "tribute" : action))));
             }
             y += 44;
         }
@@ -199,7 +209,7 @@ public final class ColonyScreen extends Screen {
     }
     @Override public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
         renderBackground(g);
-        g.fill(4, 20, width - 4, height - 4, 0xe6192730);
+        UiKit.panel(g, 4, 20, width - 8, height - 24);
         switch (tab) {
             case "overview" -> renderOverview(g);
             case "fleet" -> renderFleet(g);
@@ -282,6 +292,9 @@ public final class ColonyScreen extends Screen {
                     : Component.translatable("stance.annocraft1800." + c.getString("stance").toLowerCase(Locale.ROOT));
             line(g, Component.translatable("faction.annocraft1800." + f).append(" · ").append(state).append(" · ")
                     .append(Component.translatable("colony.annocraft1800.relation", (int) c.getDouble("relation"))), 10, y, 0xffdfc783, width - 20);
+            double rel = c.getDouble("relation"); int bw = Math.min(120, width / 4), bx = width - bw - 12;
+            UiKit.bar(g, bx, y + 2, bw, 5, (rel + 100) / 200, rel >= 30 ? UiKit.GOOD : rel >= 0 ? UiKit.GOLD : UiKit.BAD);
+            g.fill(bx + bw / 2, y + 1, bx + bw / 2 + 1, y + 8, 0xffffffff);
             List<String> owned = new ArrayList<>();
             CompoundTag owners = ClientState.economy.getCompound("diplomacy").getCompound("owners");
             for (String island : owners.getAllKeys()) if (owners.getString(island).equals(f)) owned.add(islandLabel(island, false).getString());

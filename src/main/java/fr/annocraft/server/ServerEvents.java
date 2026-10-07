@@ -59,7 +59,7 @@ public final class ServerEvents {
         if (event.getPlayer() != null) { if (AnnoCraft.isColony(event.getPlayer().level().dimension())) AnnoNetwork.sync(event.getPlayer()); return; }
         for (ServerPlayer p : event.getPlayerList().getPlayers()) if (AnnoCraft.isColony(p.level().dimension())) AnnoNetwork.sync(p);
     }
-    @SubscribeEvent public static void stopping(ServerStoppingEvent event) { CameraSessions.clear(event.getServer()); LAST_COMMAND.clear(); LAST_SYNC.clear(); }
+    @SubscribeEvent public static void stopping(ServerStoppingEvent event) { ConstructionAnimator.finishAll(); CameraSessions.clear(event.getServer()); LAST_COMMAND.clear(); LAST_SYNC.clear(); }
     @SubscribeEvent public static void stopped(ServerStoppedEvent event) { ColonyData.release(event.getServer()); }
     @SubscribeEvent public static void commands(RegisterCommandsEvent event) {
         if (Boolean.getBoolean("annocraft1800.networkSmoke")) event.getDispatcher().register(Commands.literal("anno_test_report")
@@ -92,6 +92,7 @@ public final class ServerEvents {
                         }))));
     }
     @SubscribeEvent public static void serverTick(TickEvent.ServerTickEvent event) {
+        if (event.phase == TickEvent.Phase.END) ConstructionAnimator.tick();
         // The network smoke bench compares the complete save across a restart: keep its simulation frozen.
         if (event.phase != TickEvent.Phase.END || Boolean.getBoolean("annocraft1800.networkSmoke")) return;
         var server = event.getServer();
@@ -113,7 +114,12 @@ public final class ServerEvents {
     }
     private static void broadcast(MinecraftServer server, Colony.Event e) {
         Component message = render(e);
-        for (ServerPlayer p : server.getPlayerList().getPlayers()) if (AnnoCraft.isColony(p.level().dimension())) p.sendSystemMessage(message);
+        // The HUD feed shows every event; missions are also kept in the chat history.
+        boolean chat = e.key().contains("mission") || e.key().contains("campaign");
+        for (ServerPlayer p : server.getPlayerList().getPlayers()) if (AnnoCraft.isColony(p.level().dimension())) {
+            AnnoNetwork.notice(p, e);
+            if (chat) p.sendSystemMessage(message);
+        }
     }
     public static void join(ServerPlayer player, ResourceKey<Level> world) {
         if (player.level().dimension().equals(world)) { AnnoNetwork.sync(player); return; }
@@ -135,7 +141,7 @@ public final class ServerEvents {
         player.setGameMode(GameType.ADVENTURE);
         player.teleportTo(level, first.x() + .5, 74, first.z() + .5, 0, 0);
         AnnoNetwork.sync(player);
-        player.sendSystemMessage(Component.translatable("message.annocraft1800.welcome", Component.translatable("world.annocraft1800." + AnnoCraft.worldName(world))).withStyle(net.minecraft.ChatFormatting.GOLD));
+        AnnoNetwork.notice(player, Colony.Event.of(true, "message.annocraft1800.welcome", "#world.annocraft1800." + AnnoCraft.worldName(world)));
     }
     private static void leave(ServerPlayer p) {
         if (!AnnoCraft.isColony(p.level().dimension())) return;

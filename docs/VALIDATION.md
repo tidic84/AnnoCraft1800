@@ -2,6 +2,18 @@
 
 Environnement : Windows, Java 17, Minecraft 1.20.1, Forge 47.4.0.
 
+## Version 0.4.0 — interface façon Anno
+
+| Vérification | Résultat |
+| --- | --- |
+| Compilation, 21 tests JUnit, 6 GameTests | Réussi |
+| Client graphique (français, échelle 3) : barre du haut, bandeau d’île, suivi de campagne, minimap, menu de construction avec miniatures 3D, panneau d’objet, fantôme de placement, coût au curseur, carte stratégique, animation de construction visible en cours d’élévation | Réussi, vérifié sur captures |
+| Deux clients graphiques, protocole 4 | Réussi |
+
+Le test graphique a mis en évidence deux effets de la nouvelle interface, corrigés : un clic du test tombait sous le panneau des cartes, et un bâtiment en cours d’animation n’a pas encore de toit (la sélection vise désormais le rez-de-chaussée, présent dès la pose). Le banc réseau a de nouveau échoué une fois par expiration de connexion sous la charge de la machine, puis réussi au passage suivant.
+
+Non vérifié à la main : confort du défilement par les bords, de la rotation au bouton du milieu et du tracé de routes au cliquer-glisser ; rendu à d’autres échelles d’interface que 3.
+
 ## Version 0.3.0 — les cinq étapes
 
 | Vérification | Résultat |

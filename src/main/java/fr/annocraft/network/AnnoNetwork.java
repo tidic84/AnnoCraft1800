@@ -16,7 +16,7 @@ import java.util.*;
 import java.util.function.Supplier;
 
 public final class AnnoNetwork {
-    public static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(AnnoCraft.id("main"), () -> "3", "3"::equals, "3"::equals);
+    public static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(AnnoCraft.id("main"), () -> "4", "4"::equals, "4"::equals);
     public record BuildCommand(int action, ResourceLocation definition, BlockPos origin, int rotation, UUID target) {
         public void encode(FriendlyByteBuf b) { b.writeVarInt(action); b.writeResourceLocation(definition); b.writeBlockPos(origin); b.writeVarInt(rotation); b.writeUUID(target); }
         public static BuildCommand decode(FriendlyByteBuf b) { return new BuildCommand(b.readVarInt(), b.readResourceLocation(), b.readBlockPos(), b.readVarInt(), b.readUUID()); }
@@ -37,11 +37,12 @@ public final class AnnoNetwork {
             }); ctx.get().setPacketHandled(true);
         }
     }
-    public record CameraCommand(boolean active, double x, double z) {
-        public void encode(FriendlyByteBuf b) { b.writeBoolean(active); b.writeDouble(x); b.writeDouble(z); }
-        public static CameraCommand decode(FriendlyByteBuf b) { return new CameraCommand(b.readBoolean(), b.readDouble(), b.readDouble()); }
+    public record CameraCommand(boolean active, double x, double z, float zoom) {
+        public CameraCommand(boolean active, double x, double z) { this(active, x, z, fr.annocraft.client.CameraMath.DEFAULT_ZOOM); }
+        public void encode(FriendlyByteBuf b) { b.writeBoolean(active); b.writeDouble(x); b.writeDouble(z); b.writeFloat(zoom); }
+        public static CameraCommand decode(FriendlyByteBuf b) { return new CameraCommand(b.readBoolean(), b.readDouble(), b.readDouble(), b.readFloat()); }
         public static void handle(CameraCommand m, Supplier<NetworkEvent.Context> ctx) {
-            ctx.get().enqueueWork(() -> { ServerPlayer p = ctx.get().getSender(); if (p != null) CameraSessions.update(p, m.active, m.x, m.z); });
+            ctx.get().enqueueWork(() -> { ServerPlayer p = ctx.get().getSender(); if (p != null) CameraSessions.update(p, m.active, m.x, m.z, m.zoom); });
             ctx.get().setPacketHandled(true);
         }
     }
@@ -119,6 +120,19 @@ public final class AnnoNetwork {
             }); ctx.get().setPacketHandled(true);
         }
     }
+    /** A colony event for the HUD notification feed. */
+    public record EventNotice(String key, List<String> args, boolean good) {
+        public void encode(FriendlyByteBuf b) { b.writeUtf(key, 96); b.writeCollection(args, (buf, s) -> buf.writeUtf(s, 96)); b.writeBoolean(good); }
+        public static EventNotice decode(FriendlyByteBuf b) { return new EventNotice(b.readUtf(96), b.readList(buf -> buf.readUtf(96)), b.readBoolean()); }
+        public static void handle(EventNotice m, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get().enqueueWork(() -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () ->
+                    fr.annocraft.client.Hud.notice(ServerEvents.render(new fr.annocraft.economy.Colony.Event(m.key, m.args, m.good)), m.good)));
+            ctx.get().setPacketHandled(true);
+        }
+    }
+    public static void notice(ServerPlayer p, fr.annocraft.economy.Colony.Event e) {
+        CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), new EventNotice(e.key(), e.args().stream().limit(8).toList(), e.good()));
+    }
     public static void action(String action, Object... args) { CHANNEL.sendToServer(new ActionCommand(action, ColonyActions.args(args))); }
     public static void syncEconomy(net.minecraft.server.MinecraftServer server) {
         EconomyUpdate update = null;
@@ -137,6 +151,7 @@ public final class AnnoNetwork {
         CHANNEL.registerMessage(5, CameraAnchor.class, CameraAnchor::encode, CameraAnchor::decode, CameraAnchor::handle, Optional.of(NetworkDirection.PLAY_TO_CLIENT));
         CHANNEL.registerMessage(6, RoadCommand.class, RoadCommand::encode, RoadCommand::decode, RoadCommand::handle, Optional.of(NetworkDirection.PLAY_TO_SERVER));
         CHANNEL.registerMessage(8, ActionCommand.class, ActionCommand::encode, ActionCommand::decode, ActionCommand::handle, Optional.of(NetworkDirection.PLAY_TO_SERVER));
+        CHANNEL.registerMessage(9, EventNotice.class, EventNotice::encode, EventNotice::decode, EventNotice::handle, Optional.of(NetworkDirection.PLAY_TO_CLIENT));
         CHANNEL.registerMessage(7, EconomyUpdate.class, EconomyUpdate::encode, EconomyUpdate::decode, EconomyUpdate::handle, Optional.of(NetworkDirection.PLAY_TO_CLIENT));
     }
     public static void sync(ServerPlayer p) { CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), new Snapshot(ColonyData.get(p.server).snapshot(p.server))); }

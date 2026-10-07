@@ -10,6 +10,9 @@ import java.util.*;
 public final class CameraSessions {
     public static final int RADIUS = 6;
     public static final int MAX_CHUNKS = (2 * RADIUS + 1) * (2 * RADIUS + 1);
+    /** Zoomed-out cameras load a wider area, up to 21 × 21 chunks per player. */
+    public static final int MAX_RADIUS = 10;
+    public static int radius(float zoom) { return Math.max(RADIUS, Math.min(MAX_RADIUS, (int) Math.ceil(zoom * 1.7 / 16) + 2)); }
     private static final TicketType<UUID> TICKET = TicketType.create("annocraft_camera", UUID::compareTo);
     private static final Map<UUID, Session> sessions = new HashMap<>();
     private static final class Session {
@@ -19,13 +22,15 @@ public final class CameraSessions {
         boolean acknowledged;
         Session(ServerPlayer p) { level = p.serverLevel(); body = p.position(); yaw = p.getYRot(); pitch = p.getXRot(); x = body.x; z = body.z; lastUpdate = -100; }
     }
-    public static void update(ServerPlayer p, boolean active, double x, double z) {
+    public static void update(ServerPlayer p, boolean active, double x, double z) { update(p, active, x, z, 0); }
+    public static void update(ServerPlayer p, boolean active, double x, double z, float zoom) {
         if (!active) { close(p); return; }
         if (!AnnoCraft.isColony(p.level().dimension()) || !Double.isFinite(x) || !Double.isFinite(z)) return;
         Session s = sessions.computeIfAbsent(p.getUUID(), id -> new Session(p));
         long now = p.serverLevel().getGameTime();
         if (now - s.lastUpdate < 5) return;
-        if (!BuildingService.generator(s.level).layout().inBounds((int)x, (int)z) || Math.hypot(x - s.x, z - s.z) > 64) return;
+        if (!BuildingService.generator(s.level).layout().inBounds((int)x, (int)z) || !Float.isFinite(zoom)) return;
+        int radius = radius(zoom);
         s.lastUpdate = now; s.heartbeat = now; s.x = x; s.z = z;
         if (!s.acknowledged) {
             s.acknowledged = true;
@@ -33,10 +38,10 @@ public final class CameraSessions {
             fr.annocraft.network.AnnoNetwork.CHANNEL.send(net.minecraftforge.network.PacketDistributor.PLAYER.with(() -> p),
                     new fr.annocraft.network.AnnoNetwork.CameraAnchor(s.body.x, s.body.y, s.body.z, s.yaw, s.pitch));
         }
-        p.connection.send(new ClientboundSetChunkCacheRadiusPacket(Math.max(RADIUS, p.server.getPlayerList().getViewDistance())));
+        p.connection.send(new ClientboundSetChunkCacheRadiusPacket(Math.max(radius, p.server.getPlayerList().getViewDistance())));
         ChunkPos center = new ChunkPos(net.minecraft.core.BlockPos.containing(x, 80, z));
         Set<ChunkPos> next = new HashSet<>();
-        for (int cx = -RADIUS; cx <= RADIUS; cx++) for (int cz = -RADIUS; cz <= RADIUS; cz++) next.add(new ChunkPos(center.x + cx, center.z + cz));
+        for (int cx = -radius; cx <= radius; cx++) for (int cz = -radius; cz <= radius; cz++) next.add(new ChunkPos(center.x + cx, center.z + cz));
         p.connection.send(new ClientboundSetChunkCacheCenterPacket(center.x, center.z));
         for (ChunkPos old : Set.copyOf(s.chunks)) if (!next.contains(old)) {
             s.level.getChunkSource().removeRegionTicket(TICKET, old, 2, p.getUUID());
@@ -76,6 +81,15 @@ public final class CameraSessions {
     }
     /** Centre of the player's RTS camera, when one is open. */
     public static Optional<double[]> focus(ServerPlayer p) { Session s = sessions.get(p.getUUID()); return s == null ? Optional.empty() : Optional.of(new double[]{s.x, s.z}); }
+    /** Single block change for cameras watching a chunk the player's body does not track. */
+    public static void blockChanged(ServerLevel level, net.minecraft.core.BlockPos pos) {
+        if (sessions.isEmpty()) return;
+        ChunkPos chunk = new ChunkPos(pos);
+        for (ServerPlayer p : level.players()) {
+            Session s = sessions.get(p.getUUID());
+            if (s != null && s.level == level && s.chunks.contains(chunk)) p.connection.send(new ClientboundBlockUpdatePacket(level, pos));
+        }
+    }
     public static int ticketCount() { return sessions.values().stream().mapToInt(s -> s.chunks.size()).sum(); }
     public static void refresh(ServerLevel level, net.minecraft.core.BlockPos origin, int width, int depth) {
         // Vanilla tracks the player's body. Remote camera subscribers need explicit world updates.

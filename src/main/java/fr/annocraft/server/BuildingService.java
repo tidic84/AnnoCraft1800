@@ -41,7 +41,9 @@ public final class BuildingService {
             restore(level, backup); return Result.fail("placement_failed");
         }
         data.economy().pay(island, def.economy());
-        data.put(instance); CameraSessions.refresh(level, origin, instance.width(), instance.depth()); return Result.ok();
+        data.put(instance);
+        ConstructionAnimator.start(level, instance.id(), origin, instance.width(), instance.height(), instance.depth());
+        CameraSessions.refresh(level, origin, instance.width(), instance.depth()); return Result.ok();
     }
     /** Economic placement rules: world, island ownership, founding order, fertility, deposits and unlocks. */
     public static Result rules(ColonyData data, BuildingDefinition def, IslandLayout.Island island, String world) {
@@ -58,6 +60,8 @@ public final class BuildingService {
         if (!allowed(player)) return Result.fail("wrong_region");
         ColonyData data = ColonyData.get(player.server); BuildingInstance old = data.buildings().get(id);
         if (old == null || !loaded(player.serverLevel(), old.origin(), old.width(), old.depth())) return Result.fail("not_loaded");
+        ConstructionAnimator.cancel(id);
+        ConstructionAnimator.dust(player.serverLevel(), old.origin().offset(old.width() / 2, 1, old.depth() / 2), player.serverLevel().getBlockState(old.origin()), 40, old.width() / 2.0);
         restore(player.serverLevel(), old.originalBlocks()); data.remove(id);
         // Half of the building materials are recovered into the island's storage.
         ColonyData.profile(old).cost().forEach((good, amount) -> { if (!good.equals(fr.annocraft.economy.EconomyProfile.COINS) && amount / 2 > 0) data.economy().store(old.island(), good, amount / 2); });
@@ -83,12 +87,14 @@ public final class BuildingService {
         ListTag originals = old.originalBlocks().copy();
         for (int x = 0; x < old.width(); x++) for (int z = 0; z < old.depth(); z++)
             for (int y = old.height(); y < next.height(); y++) originals.add(blockBackup(level, old.origin().offset(x, y, z)));
+        ConstructionAnimator.cancel(old.id());
         restore(level, old.originalBlocks());
         if (!placeTemplate(level, template, next, old.origin(), old.rotation())) {
             restore(level, rollback); return Result.fail("placement_failed");
         }
         data.economy().pay(old.island(), next.economy());
         data.put(new BuildingInstance(old.id(), next.id(), old.origin(), old.rotation(), old.island(), old.width(), next.height(), old.depth(), originals));
+        ConstructionAnimator.start(level, old.id(), old.origin(), old.width(), next.height(), old.depth());
         CameraSessions.refresh(level, old.origin(), old.width(), old.depth());
         return Result.ok();
     }

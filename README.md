@@ -18,15 +18,23 @@ Créer un monde puis `/anno join`. Commandes principales :
 | Touche / commande | Effet |
 | --- | --- |
 | **F6** | Vue de gestion ↔ visite à la première personne (position et orientation restaurées) |
+| **M** / dézoom maximal | Carte stratégique de l’archipel ; clic sur une île pour y placer la caméra |
 | **J** | Gestion de la colonie : aperçu, flotte, commerce, diplomatie, campagne |
-| WASD/flèches, Q/E, molette | Déplacer, pivoter, zoomer la caméra |
-| Clic, **R**, clic droit | Construire, pivoter, annuler (l’outil reste actif pour enchaîner) |
-| **C** | Copier le bâtiment sélectionné |
-| Molette sur le catalogue, ‹ › | Défiler, changer de catégorie |
+| WASD/flèches, bords de l’écran, Q/E, bouton du milieu, molette | Déplacer, pivoter, zoomer (Maj : plus vite) |
+| **1**…**9**, cartes du menu | Ouvrir une catégorie, choisir un bâtiment |
+| Clic, **R**, Échap / clic droit | Construire, pivoter, terminer (l’outil reste actif pour enchaîner) |
+| Cliquer-glisser | Tracer ou retirer une route |
+| **C**, **Suppr** | Copier, démolir le bâtiment sélectionné |
 | `/anno join new_world` | Rejoindre le Nouveau Monde (débloqué) |
 | `/anno leave`, `/anno status` | Quitter l’archipel ; état de la colonie |
 | `/anno campaign start` | Lancer la campagne (aussi depuis l’onglet Campagne) |
 | `/anno sandbox true\|false` | Construction gratuite (opérateurs) |
+
+## Interface
+
+La vue de gestion reprend la disposition d’Anno 1800 : barre du haut (trésor et solde, population par strate, île, accès à la carte, à la colonie et à la visite), bandeau des marchandises et de la main-d’œuvre de l’île, suivi de campagne permanent à droite, fil de notifications, minimap cliquable, menu de construction par catégories avec miniatures 3D des bâtiments, panneau d’objet (chaîne de production, besoins cochés, services, actions) et coût affiché près du curseur. Le bâtiment à placer apparaît en fantôme translucide vert ou rouge, avec le rayon de ses services ; une fois posé, il s’élève couche par couche en deux secondes, avec poussière et sons. Le suivi de campagne, les notifications et les dialogues des personnages restent affichés en vue de visite.
+
+La caméra est lissée, s’incline davantage en dézoomant et charge jusqu’à 21 × 21 chunks quand elle est éloignée. Au-delà, la carte stratégique prend le relais : elle est calculée à partir de la géographie des îles et ne dépend ni des chunks chargés ni de la puissance du PC. Aucun mod de distance d’affichage n’est requis ; Voxy n’existe pas pour Forge 1.20.1, et Distant Horizons reste un ajout facultatif non testé, à réserver aux machines puissantes (compatibilité partielle avec les shaders).
 
 Les visiteurs jouent en aventure ; bâtiments gérés et routes sont protégés (casse, explosions, pistons, fluides, piétinement). Des habitants se promènent autour des maisons habitées près des joueurs et des caméras.
 
@@ -68,7 +76,7 @@ Le contenu est généré : `java tools/GenerateContent.java`, exécuté depuis c
 
 La colonie est sauvegardée dans `world/data/annocraft1800_colony.dat`, format 3 : bâtiments, routes, économie, flotte, diplomatie, campagne et villes rivales. Les formats 1 et 2 sont migrés ; un format inconnu ou illisible est refusé avant écrasement. Sauvegarder le monde avant toute modification de données.
 
-Le serveur fait autorité : commandes validées sur son thread, terrain non chargé jamais généré par une commande, tickets de caméra bornés et libérés. Le protocole réseau 3 refuse les clients plus anciens. Définitions et aperçus ne sont envoyés qu’à l’arrivée et au rechargement des datapacks ; l’état économique est diffusé toutes les deux secondes.
+Le serveur fait autorité : commandes validées sur son thread, terrain non chargé jamais généré par une commande, tickets de caméra bornés (441 par joueur au plus) et libérés. Le protocole réseau 4 refuse les clients plus anciens. Définitions et aperçus ne sont envoyés qu’à l’arrivée et au rechargement des datapacks ; l’état économique est diffusé toutes les deux secondes.
 
 ## Vérification
 
@@ -87,4 +95,4 @@ Le serveur fait autorité : commandes validées sur son thread, terrain non char
 
 Les cinq étapes initiales sont livrées (voir `docs/VALIDATION.md`). Pistes : expéditions, spécialistes et objets, attractivité, charrettes visibles sur les routes, IA rivale qui construit réellement, équilibrage sur des parties longues.
 
-Licence GPL-3.0-only ; voir `LICENSE` et `NOTICE.md`. `build/distributions/annocraft1800-0.3.0-source-distribution.zip` contient les sources, tests, ressources, générateur, wrapper et scripts.
+Licence GPL-3.0-only ; voir `LICENSE` et `NOTICE.md`. `build/distributions/annocraft1800-0.4.0-source-distribution.zip` contient les sources, tests, ressources, générateur, wrapper et scripts.
