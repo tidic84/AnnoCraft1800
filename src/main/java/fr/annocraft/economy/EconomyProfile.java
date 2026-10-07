@@ -13,14 +13,17 @@ public record EconomyProfile(Map<String, Integer> cost, int upkeep, int storage,
                              String houseTier, int capacity, double tax, Map<String, Double> needs,
                              Map<String, Double> luxury, List<String> services, List<String> luxuryServices,
                              String service, int radius, String fertility, String deposit, String world,
-                             String unlockTier, int unlockResidents, boolean shipyard, int defense) {
+                             String unlockTier, int unlockResidents, boolean shipyard, int defense,
+                             int boostRadius, double boost, Map<String, Double> boostInputs) {
     public static final String COINS = "coins", ANY_WORLD = "any";
     public static final EconomyProfile NONE = new EconomyProfile(Map.of(), 0, 0, "farmers", 0, 0, Map.of(), Map.of(), null, 0, 0, Map.of(),
-            Map.of(), List.of(), List.of(), null, 0, null, null, ANY_WORLD, null, 0, false, 0);
+            Map.of(), List.of(), List.of(), null, 0, null, null, ANY_WORLD, null, 0, false, 0, 0, 0, Map.of());
     public boolean producer() { return cycle > 0 && !outputs.isEmpty(); }
     public boolean housing() { return capacity > 0 && houseTier != null; }
     public boolean storageNode() { return storage > 0; }
     public boolean serviceProvider() { return service != null && radius > 0; }
+    /** Raises the productivity of producers of its island within its radius (electricity, trade unions). */
+    public boolean booster() { return boostRadius > 0 && boost > 0; }
     public int coinCost() { return cost.getOrDefault(COINS, 0); }
     public boolean buildableIn(String worldName) { return ANY_WORLD.equals(world) || world.equals(worldName); }
 
@@ -70,9 +73,15 @@ public record EconomyProfile(Map<String, Integer> cost, int upkeep, int storage,
         }
         boolean shipyard = json.has("shipyard") && json.get("shipyard").getAsBoolean();
         int defense = json.has("defense") ? json.get("defense").getAsInt() : 0;
+        int boostRadius = 0; double boost = 0; Map<String, Double> boostInputs = Map.of();
+        if (json.has("boost")) {
+            JsonObject b = json.getAsJsonObject("boost");
+            boostRadius = b.get("radius").getAsInt(); boost = b.get("productivity").getAsDouble(); boostInputs = doubles(b, "inputs");
+        }
         if (upkeep < 0 || storage < 0 || workforce < 0 || tax < 0 || defense < 0 || unlockResidents < 0) throw new IllegalArgumentException("Negative economy value");
         return new EconomyProfile(cost, upkeep, storage, workTier, workforce, cycle, inputs, outputs, houseTier, capacity, tax, needs,
-                luxury, services, luxuryServices, service, radius, fertility, deposit, world, unlockTier, unlockResidents, shipyard, defense);
+                luxury, services, luxuryServices, service, radius, fertility, deposit, world, unlockTier, unlockResidents, shipyard, defense,
+                boostRadius, boost, boostInputs);
     }
     private static Map<String, Integer> ints(JsonObject json, String key) {
         if (!json.has(key)) return Map.of();
@@ -126,6 +135,10 @@ public record EconomyProfile(Map<String, Integer> cost, int upkeep, int storage,
         if (unlockTier != null) { JsonObject u = new JsonObject(); u.addProperty("tier", unlockTier); u.addProperty("residents", unlockResidents); j.add("unlock", u); }
         if (shipyard) j.addProperty("shipyard", true);
         if (defense > 0) j.addProperty("defense", defense);
+        if (booster()) {
+            JsonObject b = new JsonObject(); b.addProperty("radius", boostRadius); b.addProperty("productivity", boost);
+            JsonObject in = new JsonObject(); boostInputs.forEach(in::addProperty); b.add("inputs", in); j.add("boost", b);
+        }
         return j;
     }
 }

@@ -74,6 +74,8 @@ public final class CameraSessions {
             if (p.isAlive()) p.connection.teleport(s.body.x, s.body.y, s.body.z, s.yaw, s.pitch);
         }
     }
+    /** Centre of the player's RTS camera, when one is open. */
+    public static Optional<double[]> focus(ServerPlayer p) { Session s = sessions.get(p.getUUID()); return s == null ? Optional.empty() : Optional.of(new double[]{s.x, s.z}); }
     public static int ticketCount() { return sessions.values().stream().mapToInt(s -> s.chunks.size()).sum(); }
     public static void refresh(ServerLevel level, net.minecraft.core.BlockPos origin, int width, int depth) {
         // Vanilla tracks the player's body. Remote camera subscribers need explicit world updates.

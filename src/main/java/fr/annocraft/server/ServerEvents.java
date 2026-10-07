@@ -54,6 +54,11 @@ public final class ServerEvents {
         // Gives the graphical smoke test island stock lines to render.
         if (Boolean.getBoolean("annocraft1800.clientSmoke") && colony.economy().stock(first, "fish") == 0) { colony.economy().addStock(first, "fish", 12); colony.economy().addStock(first, "timber", 30); }
     }
+    /** Datapack reloads can change building definitions: resend the full snapshot. */
+    @SubscribeEvent public static void datapack(OnDatapackSyncEvent event) {
+        if (event.getPlayer() != null) { if (AnnoCraft.isColony(event.getPlayer().level().dimension())) AnnoNetwork.sync(event.getPlayer()); return; }
+        for (ServerPlayer p : event.getPlayerList().getPlayers()) if (AnnoCraft.isColony(p.level().dimension())) AnnoNetwork.sync(p);
+    }
     @SubscribeEvent public static void stopping(ServerStoppingEvent event) { CameraSessions.clear(event.getServer()); LAST_COMMAND.clear(); LAST_SYNC.clear(); }
     @SubscribeEvent public static void stopped(ServerStoppedEvent event) { ColonyData.release(event.getServer()); }
     @SubscribeEvent public static void commands(RegisterCommandsEvent event) {
@@ -95,6 +100,7 @@ public final class ServerEvents {
         data.tickEconomy(1);
         for (Colony.Event e : data.drainEvents()) broadcast(server, e);
         if (server.getTickCount() % 40 == 0) AnnoNetwork.syncEconomy(server);
+        if (server.getTickCount() % 100 == 0) WorldLife.tick(server);
     }
     public static Component render(Colony.Event e) {
         Object[] args = e.args().stream().map(a -> a.startsWith("#") ? Component.translatable(a.substring(1)) : (Object) Component.literal(islandName(a))).toArray();
@@ -163,7 +169,7 @@ public final class ServerEvents {
         ColonyData data = ColonyData.get(level.getServer());
         // Both worlds share one colony; buildings belong to the level they were placed in.
         String name = AnnoCraft.worldName(level.dimension());
-        return data.road(name, pos) || data.buildings().values().stream().anyMatch(b -> b.contains(pos) && fr.annocraft.economy.ColonyEconomy.worldOf(b.island()).equals(name));
+        return data.road(name, pos) || data.managed(name, pos);
     }
     @SubscribeEvent public static void breaking(BlockEvent.BreakEvent event) {
         if (protectedAt(event.getLevel(), event.getPos())) event.setCanceled(true);
@@ -174,6 +180,9 @@ public final class ServerEvents {
     @SubscribeEvent public static void interact(PlayerInteractEvent.RightClickBlock event) {
         if (protectedAt(event.getLevel(), event.getPos()) || protectedAt(event.getLevel(), event.getPos().relative(event.getFace() == null ? net.minecraft.core.Direction.UP : event.getFace()))) event.setCanceled(true);
     }
+    /** Citizens are scenery: no trading, no leads, no name tags. */
+    @SubscribeEvent public static void citizen(PlayerInteractEvent.EntityInteract event) { if (WorldLife.citizen(event.getTarget())) event.setCanceled(true); }
+    @SubscribeEvent public static void citizenSpecific(PlayerInteractEvent.EntityInteractSpecific event) { if (WorldLife.citizen(event.getTarget())) event.setCanceled(true); }
     @SubscribeEvent public static void trample(BlockEvent.FarmlandTrampleEvent event) {
         if (protectedAt(event.getLevel(), event.getPos())) event.setCanceled(true);
     }

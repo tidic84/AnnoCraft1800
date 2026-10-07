@@ -33,16 +33,16 @@ public final class ClientState {
         CompoundTag worlds = tag.getCompound("worlds");
         for (String name : worlds.getAllKeys()) LAYOUTS.put(name, fr.annocraft.server.ColonyData.layout(worlds.getCompound(name), name));
         updateWorld();
-        DEFINITIONS.clear(); BUILDINGS.clear(); PREVIEWS.clear();
+        BUILDINGS.clear();
+        if (tag.contains("definitions")) { DEFINITIONS.clear(); PREVIEWS.clear(); }
         for (Tag t : tag.getList("definitions", Tag.TAG_COMPOUND)) {
             CompoundTag definition = (CompoundTag)t; BuildingDefinition d = BuildingDefinition.fromTag(definition); DEFINITIONS.put(d.id(), d);
             CompoundTag preview = definition.getCompound("preview"); ListTag palette = preview.getList("palette", Tag.TAG_COMPOUND);
             List<PreviewBlock> blocks = new ArrayList<>(); Minecraft mc = Minecraft.getInstance();
-            if (mc.level != null) for (Tag entry : preview.getList("blocks", Tag.TAG_COMPOUND)) {
-                CompoundTag block = (CompoundTag)entry; int index = block.getInt("state"); if (index < 0 || index >= palette.size()) continue;
+            if (mc.level != null) for (int packed : preview.getIntArray("packed")) {
+                int index = packed >>> 15; if (index >= palette.size()) continue;
                 var state = NbtUtils.readBlockState(mc.level.holderLookup(net.minecraft.core.registries.Registries.BLOCK), palette.getCompound(index));
-                ListTag pos = block.getList("pos", Tag.TAG_INT);
-                if (!state.isAir() && pos.size() == 3) blocks.add(new PreviewBlock(new net.minecraft.core.BlockPos(pos.getInt(0), pos.getInt(1), pos.getInt(2)), state));
+                if (!state.isAir()) blocks.add(new PreviewBlock(new net.minecraft.core.BlockPos(packed & 31, packed >> 5 & 31, packed >> 10 & 31), state));
             }
             PREVIEWS.put(d.id(), List.copyOf(blocks));
         }
@@ -62,9 +62,12 @@ public final class ClientState {
         return BUILDINGS.values().stream().filter(b -> ColonyEconomy.worldOf(b.island()).equals(world)).toList();
     }
     public static CompoundTag economy = new CompoundTag();
+    /** When the last economy snapshot arrived, to extrapolate ship voyages smoothly. */
+    public static long economyTime = System.nanoTime();
     public static final Map<UUID, CompoundTag> SITES = new HashMap<>();
     public static void receiveEconomy(CompoundTag tag) {
         if (tag == null) return;
+        economyTime = System.nanoTime();
         economy = tag; SITES.clear();
         for (Tag t : tag.getList("sites", Tag.TAG_COMPOUND)) { CompoundTag s = (CompoundTag) t; SITES.put(s.getUUID("id"), s); }
     }

@@ -104,8 +104,8 @@ public final class RtsController {
             x = Math.max(-half, Math.min(half, x + move[0] * speed)); z = Math.max(-half, Math.min(half, z + move[1] * speed));
             if (down(GLFW.GLFW_KEY_Q)) yaw -= 2;
             if (down(GLFW.GLFW_KEY_E)) yaw += 2;
-            updateAnchor();
         }
+        updateAnchor();
         mc.player.setYRot(bodyYaw); mc.player.setXRot(bodyPitch); mc.player.setDeltaMovement(Vec3.ZERO);
         if (++ticks % 5 == 0) AnnoNetwork.CHANNEL.sendToServer(new AnnoNetwork.CameraCommand(true, x, z));
     }

@@ -84,6 +84,10 @@ public final class GenerateContent {
         if (o.containsKey("unlock")) { String[] t = o.get("unlock").split(":"); e.add("\"unlock\": {\"tier\": \"" + t[0] + "\", \"residents\": " + t[1] + "}"); }
         if (o.containsKey("shipyard")) e.add("\"shipyard\": true");
         if (o.containsKey("defense")) e.add("\"defense\": " + o.get("defense"));
+        if (o.containsKey("boost")) {
+            String[] t = o.get("boost").split(":");
+            e.add("\"boost\": {\"radius\": " + t[0] + ", \"productivity\": " + t[1] + ", \"inputs\": " + (t.length > 3 ? "{\"" + t[2] + "\": " + t[3] + "}" : "{}") + "}");
+        }
         s.append("  \"economy\": {\n    ").append(String.join(",\n    ", e)).append("\n  }\n}\n");
         return s.toString();
     }

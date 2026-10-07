@@ -6,7 +6,7 @@
 # Styles: house:WALL:ROOF[:plain]  farm:CROP:SOIL:HUT  ranch:HUT  mine:ORE:BASE  market:ROOF   (+ " chimney")
 # Options: coastal world=old|new|any level=N upgrade=id cost=a:1,b:2 upkeep=N storage=N work=tier:N cycle=N in=.. out=..
 #          house=tier:capacity:tax needs=good:rate,.. lux=good:rate,.. svc=a,b lsvc=a,b service=id:radius
-#          fert=x dep=x unlock=tier:residents shipyard defense=N
+#          fert=x dep=x unlock=tier:residents shipyard defense=N boost=radius:productivity[:good:perMinute]
 
 tier|farmers|Paysans|Farmers
 tier|workers|Ouvriers|Workers
@@ -68,6 +68,8 @@ building|warehouse|Entrepôt|Warehouse|house:cut_sandstone:stone_bricks|11x8x9|c
 building|market|Marché|Marketplace|market:red_terracotta|9x5x9|cost=coins:200,timber:4 upkeep=10 service=market:40
 building|shipyard|Chantier naval|Shipyard|house:stone_bricks:dark_prismarine|11x9x9|coastal shipyard cost=coins:1000,timber:10 upkeep=20
 building|harbor_defense|Batterie côtière|Harbour battery|house:deepslate_bricks:polished_blackstone_bricks:plain|5x9x5|coastal defense=60 unlock=workers:1 cost=coins:1000,timber:6,weapons:4 upkeep=25
+building|trade_union|Syndicat|Trade union|house:red_terracotta:deepslate_tiles|9x9x9|world=old unlock=workers:1 cost=coins:1500,timber:8,bricks:4 upkeep=40 boost=35:0.25
+building|power_plant|Centrale électrique|Power plant|house:deepslate_bricks:polished_blackstone_bricks chimney|9x10x9|world=old unlock=engineers:1 cost=coins:5000,bricks:10,steel_beams:8 upkeep=120 boost=40:1.0:coal:4
 
 # Old World residences: farmers to investors
 building|residence|Résidence de paysans|Farmer residence|house:terracotta:deepslate_tiles|7x7x7|world=old upgrade=residence_2 cost=timber:2 house=farmers:10:1 needs=fish:0.05,work_clothes:0.025 svc=market lux=schnapps:0.025 lsvc=pub

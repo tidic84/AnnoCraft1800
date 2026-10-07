@@ -143,6 +143,9 @@ public final class FoundationGameTests {
             ColonyData migrated = ColonyData.load(legacy);
             h.assertTrue(migrated.economy().sandbox() && migrated.buildings().keySet().equals(data.buildings().keySet()), "Version 1 migration lost buildings or budget mode");
 
+            var bytes = new java.io.ByteArrayOutputStream();
+            try { NbtIo.write(data.snapshot(l.getServer()), new java.io.DataOutputStream(bytes)); } catch (java.io.IOException e) { throw new IllegalStateException(e); }
+            h.assertTrue(bytes.size() < 512 * 1024, "Snapshot too large for one packet: " + bytes.size());
             h.assertTrue(RoadService.remove(p, from, to).success(), "Road removal failed");
             h.assertTrue(data.roads().isEmpty() && l.getBlockState(ground).is(net.minecraft.world.level.block.Blocks.GRASS_BLOCK), "Road removal did not restore terrain");
             for (BuildingInstance b : List.copyOf(data.buildings().values())) if (b.origin().equals(at) || b.origin().equals(hut)) BuildingService.demolish(p, b.id());

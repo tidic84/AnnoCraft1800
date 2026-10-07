@@ -19,7 +19,7 @@ public final class ColonyEconomy {
         double centerZ() { return z + depth / 2.0; }
     }
     public static final class SiteState {
-        public double residents, progress, productivity, supply = 1, luxury;
+        public double residents, progress, productivity, supply = 1, luxury, boost;
         public boolean connected;
         public Status status = Status.OK;
     }
@@ -122,6 +122,7 @@ public final class ColonyEconomy {
             if (p.housing() && s.connected) tier(site.island(), p.houseTier())[0] += (int) Math.floor(s.residents + 1e-9);
             if (p.producer() && p.workforce() > 0 && s.connected) tier(site.island(), p.workTier())[1] += p.workforce();
         }
+        boosts(sites, dt, flow);
         double income = 0, upkeep = extraUpkeepPerMinute / 60 * dt;
         for (Site site : sites) {
             SiteState s = states.get(site.id()); EconomyProfile p = site.profile();
@@ -149,9 +150,9 @@ public final class ColonyEconomy {
         if (!s.connected) { s.productivity = 0; s.status = Status.NO_ROAD; return; }
         int[] w = p.workforce() > 0 ? workforce(site.island(), p.workTier()) : null;
         double ratio = w == null ? 1 : w[1] == 0 ? 0 : Math.min(1, (double) w[0] / w[1]);
-        s.productivity = ratio;
-        if (ratio <= 0) { s.status = Status.NO_WORKFORCE; return; }
-        s.progress = Math.min(1, s.progress + dt * ratio / p.cycle());
+        if (ratio <= 0) { s.productivity = 0; s.status = Status.NO_WORKFORCE; return; }
+        s.productivity = ratio * (1 + s.boost);
+        s.progress = Math.min(1, s.progress + dt * s.productivity / p.cycle());
         s.status = ratio < 1 ? Status.NO_WORKFORCE : Status.OK;
         if (s.progress < 1) return;
         for (var in : p.inputs().entrySet()) if (stock(site.island(), in.getKey()) + 1e-9 < in.getValue()) { s.status = Status.NO_INPUT; return; }
@@ -161,6 +162,22 @@ public final class ColonyEconomy {
         p.inputs().forEach((good, amount) -> { addStock(site.island(), good, -amount); f.merge(good, (double) -amount, Double::sum); });
         p.outputs().forEach((good, amount) -> { addStock(site.island(), good, amount); f.merge(good, (double) amount, Double::sum); });
         s.progress = 0;
+    }
+    /** Active boosters (fed with their inputs) raise producers of the same island within their radius. */
+    private void boosts(Collection<Site> sites, double dt, Map<String, Map<String, Double>> flow) {
+        for (Site site : sites) states.get(site.id()).boost = 0;
+        for (Site b : sites) {
+            EconomyProfile p = b.profile(); SiteState bs = states.get(b.id());
+            if (!p.booster() || !bs.connected) continue;
+            boolean fed = p.boostInputs().entrySet().stream().allMatch(e -> stock(b.island(), e.getKey()) + 1e-9 >= e.getValue() / 60 * dt);
+            bs.status = fed ? Status.OK : Status.NO_INPUT; bs.productivity = fed ? 1 : 0;
+            if (!fed) continue;
+            Map<String, Double> f = flow.computeIfAbsent(b.island(), k -> new TreeMap<>());
+            p.boostInputs().forEach((good, rate) -> { addStock(b.island(), good, -rate / 60 * dt); f.merge(good, -rate / 60 * dt, Double::sum); });
+            for (Site s : sites)
+                if (s.profile().producer() && s.island().equals(b.island()) && Math.hypot(s.centerX() - b.centerX(), s.centerZ() - b.centerZ()) <= p.boostRadius())
+                    states.get(s.id()).boost += p.boost();
+        }
     }
     private double consume(Site site, SiteState s, Map<String, Double> needs, double dt, Map<String, Double> flow, double[] fulfilled) {
         for (var need : needs.entrySet()) {
@@ -307,7 +324,7 @@ public final class ColonyEconomy {
             CompoundTag b = new CompoundTag(); b.putUUID("id", site.id()); b.putBoolean("connected", s.connected);
             b.putByte("status", (byte) s.status.ordinal()); b.putDouble("residents", s.residents);
             b.putDouble("productivity", s.productivity); b.putDouble("supply", s.supply); b.putDouble("progress", s.progress);
-            b.putDouble("luxury", s.luxury);
+            b.putDouble("luxury", s.luxury); b.putDouble("boost", s.boost);
             ListTag covered = new ListTag(); coverage.getOrDefault(site.id(), Set.of()).stream().sorted().forEach(c -> covered.add(StringTag.valueOf(c)));
             b.put("services", covered);
             list.add(b);

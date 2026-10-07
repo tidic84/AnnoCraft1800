@@ -29,6 +29,8 @@ public final class ColonyData extends SavedData implements Colony {
     private final Map<String, CompoundTag> worlds = new TreeMap<>();
     private Geography geography = Geography.of(List.of());
     private final List<Event> events = new ArrayList<>();
+    /** Faction islands whose visible settlement was built ("built") or removed after conquest ("cleared"). */
+    private final Map<String, String> decorations = new TreeMap<>();
     private long revision;
     private long portsRevision = -1;
     private Set<String> ports = Set.of();
@@ -95,7 +97,28 @@ public final class ColonyData extends SavedData implements Colony {
         return buildings.values().stream().filter(b -> b.island().equals(island)).mapToInt(b -> profile(b).defense()).sum();
     }
     @Override public void event(Event event) { events.add(event); }
+    public boolean decorated(String island) { return decorations.containsKey(island); }
+    public String decoration(String island) { return decorations.get(island); }
+    public void markDecorated(String island) { decorations.put(island, "built"); setDirty(); }
+    public void markCleared(String island) { decorations.put(island, "cleared"); setDirty(); }
     public List<Event> drainEvents() { List<Event> out = List.copyOf(events); events.clear(); return out; }
+    private long indexRevision = -1;
+    private Map<Long, List<BuildingInstance>> chunkIndex = Map.of();
+    /** Managed building containing a block, looked up through a per-chunk index (block events are frequent). */
+    public boolean managed(String world, BlockPos pos) {
+        if (indexRevision != revision) {
+            Map<Long, List<BuildingInstance>> index = new HashMap<>();
+            for (BuildingInstance b : buildings.values()) {
+                String w = ColonyEconomy.worldOf(b.island());
+                for (int x = b.origin().getX() >> 4; x <= (b.origin().getX() + b.width() - 1) >> 4; x++)
+                    for (int z = b.origin().getZ() >> 4; z <= (b.origin().getZ() + b.depth() - 1) >> 4; z++)
+                        index.computeIfAbsent(tile(w, x, z), k -> new ArrayList<>()).add(b);
+            }
+            chunkIndex = index; indexRevision = revision;
+        }
+        for (BuildingInstance b : chunkIndex.getOrDefault(tile(world, pos.getX() >> 4, pos.getZ() >> 4), List.of())) if (b.contains(pos)) return true;
+        return false;
+    }
     public boolean newWorldOpen() {
         return economy.sandbox() || campaign.newWorldUnlocked() || economy.population("artisans") > 0
                 || ports().stream().anyMatch(i -> IslandLayout.NEW_WORLD.equals(geography.world(i)));
@@ -205,6 +228,7 @@ public final class ColonyData extends SavedData implements Colony {
             data.diplomacy = Diplomacy.load(tag.getCompound("diplomacy"));
             data.maritime = Maritime.load(tag.getCompound("maritime"));
             data.campaign = Campaign.load(tag.getCompound("campaign"));
+            CompoundTag d = tag.getCompound("decorations"); for (String island : d.getAllKeys()) data.decorations.put(island, d.getString(island));
         } else {
             // Earlier colonies own the islands they built storage on.
             for (BuildingInstance b : data.buildings.values()) if (b.definition().getPath().equals("trading_post") || b.definition().getPath().equals("warehouse")) data.diplomacy.claim(b.island());
@@ -212,19 +236,36 @@ public final class ColonyData extends SavedData implements Colony {
         data.rebuildGeography();
         return data;
     }
-    public CompoundTag snapshot(MinecraftServer server) {
+    public CompoundTag snapshot(MinecraftServer server) { return snapshot(server, true); }
+    /**  definitions include building definitions and structure previews (sent on join and datapack reload only) */
+    public CompoundTag snapshot(MinecraftServer server, boolean definitions) {
         CompoundTag t = new CompoundTag(); t.putInt("version", VERSION); t.putLong("revision", revision);
         if (Boolean.getBoolean("annocraft1800.networkSmoke")) t.putBoolean("test_clients_ready", fr.annocraft.testing.NetworkGameTest.ready());
         CompoundTag w = new CompoundTag(); worlds.forEach((name, a) -> w.put(name, a.copy())); t.put("worlds", w);
         ListTag b = new ListTag(); buildings.values().forEach(v -> b.add(v.toTag(false))); t.put("buildings", b);
         ListTag defs = new ListTag();
         var level = server.getLevel(fr.annocraft.AnnoCraft.ARCHIPELAGO);
-        BuildingDefinitions.all().forEach(v -> {
+        if (definitions) BuildingDefinitions.all().forEach(v -> {
             CompoundTag definition = v.toTag();
-            if (level != null) level.getStructureManager().get(v.structure()).ifPresent(template -> definition.put("preview", template.save(new CompoundTag())));
+            if (level != null) level.getStructureManager().get(v.structure()).ifPresent(template -> definition.put("preview", compactPreview(template.save(new CompoundTag()))));
             defs.add(definition);
-        }); t.put("definitions", defs);
+        });
+        if (definitions) t.put("definitions", defs);
         t.put("economy", economySnapshot());
+        return t;
+    }
+    /** Non-air blocks only, packed as x | y << 5 | z << 10 | palette index << 15, to keep the snapshot small. */
+    static CompoundTag compactPreview(CompoundTag template) {
+        ListTag palette = template.getList("palette", Tag.TAG_COMPOUND), kept = new ListTag();
+        Map<Integer, Integer> remap = new HashMap<>(); List<Integer> packed = new ArrayList<>();
+        for (Tag entry : template.getList("blocks", Tag.TAG_COMPOUND)) {
+            CompoundTag block = (CompoundTag) entry; int state = block.getInt("state");
+            if (state < 0 || state >= palette.size() || palette.getCompound(state).getString("Name").equals("minecraft:air")) continue;
+            ListTag pos = block.getList("pos", Tag.TAG_INT); if (pos.size() != 3) continue;
+            int index = remap.computeIfAbsent(state, s -> { kept.add(palette.getCompound(s).copy()); return kept.size() - 1; });
+            packed.add(pos.getInt(0) & 31 | (pos.getInt(1) & 31) << 5 | (pos.getInt(2) & 31) << 10 | index << 15);
+        }
+        CompoundTag t = new CompoundTag(); t.put("palette", kept); t.putIntArray("packed", packed.stream().mapToInt(Integer::intValue).toArray());
         return t;
     }
     public CompoundTag economySnapshot() {
@@ -248,6 +289,7 @@ public final class ColonyData extends SavedData implements Colony {
         tag.put("diplomacy", diplomacy.save());
         tag.put("maritime", maritime.save());
         tag.put("campaign", campaign.save());
+        CompoundTag d = new CompoundTag(); decorations.forEach(d::putString); tag.put("decorations", d);
         return tag;
     }
 }

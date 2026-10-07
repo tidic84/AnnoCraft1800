@@ -15,7 +15,7 @@ import org.lwjgl.glfw.GLFW;
 import java.util.*;
 
 public final class RtsScreen extends Screen {
-    private static final int SIDE = 142, BAR = 48, ROW = 16, LIST_TOP = 46;
+    private static final int SIDE = 160, BAR = 48, ROW = 16, LIST_TOP = 46;
     static final List<String> CATEGORIES = List.of("infrastructure", "housing", "services", "farmers", "workers", "artisans", "engineers", "investors", "new_world");
     private static String category = "infrastructure";
     private static int scroll;
@@ -27,7 +27,7 @@ public final class RtsScreen extends Screen {
     static String category(BuildingDefinition d) {
         EconomyProfile e = d.economy();
         if (e.housing()) return "housing";
-        if (e.storageNode() || e.shipyard() || e.defense() > 0) return "infrastructure";
+        if (e.storageNode() || e.shipyard() || e.defense() > 0 || e.booster()) return "infrastructure";
         if (e.serviceProvider()) return "services";
         if (IslandLayout.NEW_WORLD.equals(e.world())) return "new_world";
         return e.unlockTier() == null ? "farmers" : e.unlockTier();
@@ -116,6 +116,10 @@ public final class RtsScreen extends Screen {
         if (e.deposit() != null) c.append("\n").append(Component.translatable("tooltip.annocraft1800.deposit", Component.translatable("resource.annocraft1800." + e.deposit())));
         if (e.shipyard()) c.append("\n").append(Component.translatable("tooltip.annocraft1800.shipyard"));
         if (e.defense() > 0) c.append("\n").append(Component.translatable("tooltip.annocraft1800.defense", e.defense()));
+        if (e.booster()) {
+            c.append("\n").append(Component.translatable("tooltip.annocraft1800.boost", Math.round(e.boost() * 100), e.boostRadius()));
+            if (!e.boostInputs().isEmpty()) c.append("\n").append(Component.translatable("tooltip.annocraft1800.boost_input", amounts(e.boostInputs())));
+        }
         if (def.coastal()) c.append("\n").append(Component.translatable("tooltip.annocraft1800.coastal"));
         if (e.unlockTier() != null) c.append("\n").append(Component.translatable("tooltip.annocraft1800.unlock", e.unlockResidents(), Component.translatable("tier.annocraft1800." + e.unlockTier()))
                 .withStyle(unlocked(e) ? net.minecraft.ChatFormatting.GRAY : net.minecraft.ChatFormatting.RED));

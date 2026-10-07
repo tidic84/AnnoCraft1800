@@ -59,6 +59,8 @@ public final class BuildingService {
         ColonyData data = ColonyData.get(player.server); BuildingInstance old = data.buildings().get(id);
         if (old == null || !loaded(player.serverLevel(), old.origin(), old.width(), old.depth())) return Result.fail("not_loaded");
         restore(player.serverLevel(), old.originalBlocks()); data.remove(id);
+        // Half of the building materials are recovered into the island's storage.
+        ColonyData.profile(old).cost().forEach((good, amount) -> { if (!good.equals(fr.annocraft.economy.EconomyProfile.COINS) && amount / 2 > 0) data.economy().store(old.island(), good, amount / 2); });
         CameraSessions.refresh(player.serverLevel(), old.origin(), old.width(), old.depth()); return Result.ok();
     }
     public static Result upgrade(ServerPlayer player, UUID id) {

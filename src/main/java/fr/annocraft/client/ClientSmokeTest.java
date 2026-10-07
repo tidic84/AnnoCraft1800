@@ -91,7 +91,12 @@ public final class ClientSmokeTest {
                     }
                 }
                 case 4 -> {
-                    if (ClientState.BUILDINGS.size() == 1 && elapsed > 10) {
+                    if (ClientState.BUILDINGS.size() == 1) {
+                        // Centre the camera on the building so panels never cover it.
+                        var target = ClientState.BUILDINGS.values().iterator().next();
+                        RtsController.x = target.origin().getX() + target.width() / 2.0; RtsController.z = target.origin().getZ() + target.depth() / 2.0;
+                    }
+                    if (ClientState.BUILDINGS.size() == 1 && elapsed > 20) {
                         RtsController.placement = null;
                         residence = ClientState.BUILDINGS.keySet().iterator().next();
                         var building = ClientState.BUILDINGS.get(residence);
@@ -135,7 +140,15 @@ public final class ClientSmokeTest {
                         if (System.getProperty("annocraft1800.networkRole") != null) mc.player.connection.sendCommand("anno_test_report");
                     }
                 }
-                case 9 -> { if (elapsed > 40) mc.stop(); }
+                case 9 -> {
+                    // Colony screen: one screenshot per tab (not in the two-client network bench).
+                    if (System.getProperty("annocraft1800.networkRole") != null) { if (elapsed > 40) mc.stop(); break; }
+                    int index = elapsed / 30;
+                    if (elapsed == 1) AnnoNetwork.action("campaign_start");
+                    if (index < ColonyScreen.TABS.length && elapsed % 30 == 5) { ColonyScreen.tab = ColonyScreen.TABS[index]; mc.setScreen(new ColonyScreen(null)); }
+                    if (index < ColonyScreen.TABS.length && elapsed % 30 == 28) Screenshot.grab(mc.gameDirectory, "colony-" + ColonyScreen.tab + ".png", mc.getMainRenderTarget(), c -> {});
+                    if (index > ColonyScreen.TABS.length) mc.stop();
+                }
             }
         } catch (Exception error) {
             try { Files.writeString(mc.gameDirectory.toPath().resolve("smoke-result.txt"), "FAIL stage=" + stage + ": " + error + "\n"); } catch (Exception ignored) { }

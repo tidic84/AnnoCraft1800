@@ -99,6 +99,21 @@ class ColonyEconomyTest {
         assertEquals(Set.of(port.id()), ColonyEconomy.connectivity(List.of(port, other), road(0, 5, 3)));
     }
 
+    @Test void poweredProducersWorkTwiceAsFastAndBurnCoal() {
+        EconomyProfile mill = profile("{\"production\":{\"cycle\":10,\"outputs\":{\"timber\":1}}}");
+        EconomyProfile plant = profile("{\"boost\":{\"radius\":40,\"productivity\":1.0,\"inputs\":{\"coal\":6}}}");
+        ColonyEconomy plain = new ColonyEconomy(), powered = new ColonyEconomy();
+        ColonyEconomy.Site port = site("a", 0, 0, 3, 3, PORT), saw = site("a", 4, 2, 1, 1, mill), power = site("a", 6, 2, 1, 1, plant);
+        List<ColonyEconomy.Site> without = List.of(port, saw), with = List.of(port, saw, power);
+        without.forEach(plain::placed); with.forEach(powered::placed);
+        powered.addStock("a", "coal", 10);
+        run(plain, without, road(0, 8, 3), 120); run(powered, with, road(0, 8, 3), 120);
+        double base = plain.stock("a", "timber") - 30, boosted = powered.stock("a", "timber") - 30;
+        assertTrue(boosted >= 2 * base - 1, "Power did not double output: " + base + " vs " + boosted);
+        assertTrue(powered.stock("a", "coal") < 1, "Power plant burnt no coal");
+        assertEquals(ColonyEconomy.Status.NO_INPUT, powered.state(power.id()).status, "Power plant kept running without coal");
+    }
+
     @Test void saveRoundTripKeepsStocksAndResidents() {
         ColonyEconomy e = new ColonyEconomy();
         ColonyEconomy.Site port = site("a", 0, 0, 11, 9, PORT), house = site("a", 12, 10, 7, 7, HOUSE);

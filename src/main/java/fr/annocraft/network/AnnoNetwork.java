@@ -140,7 +140,13 @@ public final class AnnoNetwork {
         CHANNEL.registerMessage(7, EconomyUpdate.class, EconomyUpdate::encode, EconomyUpdate::decode, EconomyUpdate::handle, Optional.of(NetworkDirection.PLAY_TO_CLIENT));
     }
     public static void sync(ServerPlayer p) { CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), new Snapshot(ColonyData.get(p.server).snapshot(p.server))); }
+    /** Buildings, roads and economy after a change; definitions are not resent. */
     public static void syncAll(net.minecraft.server.MinecraftServer server) {
-        for (ServerPlayer p : server.getPlayerList().getPlayers()) if (AnnoCraft.isColony(p.level().dimension())) sync(p);
+        Snapshot update = null;
+        for (ServerPlayer p : server.getPlayerList().getPlayers()) if (AnnoCraft.isColony(p.level().dimension())) {
+            if (update == null) update = new Snapshot(ColonyData.get(server).snapshot(server, false));
+            Snapshot message = update;
+            CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), message);
+        }
     }
 }

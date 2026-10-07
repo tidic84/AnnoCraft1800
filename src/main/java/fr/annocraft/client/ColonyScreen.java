@@ -12,8 +12,8 @@ import java.util.*;
 
 /** Colony-wide management: overview, fleet and trade routes, merchants, diplomacy and the campaign. */
 public final class ColonyScreen extends Screen {
-    private static final String[] TABS = {"overview", "fleet", "trade", "diplomacy", "campaign"};
-    private static String tab = "overview";
+    static final String[] TABS = {"overview", "fleet", "trade", "diplomacy", "campaign"};
+    static String tab = "overview";
     // Selections survive reopening the screen; indexes are clamped to the current lists.
     private static UUID ship;
     private static int type, yard, target, from, to, out, back, escort, partner, market, good;
@@ -77,11 +77,12 @@ public final class ColonyScreen extends Screen {
         List<String> result = new ArrayList<>(); Diplomacy.FACTIONS.forEach(f -> result.add(f.id())); return result;
     }
     static CompoundTag faction(String id) { return ClientState.economy.getCompound("diplomacy").getCompound("factions").getCompound(id); }
-    static Component islandLabel(String id) {
-        if (id == null) return Component.translatable("colony.annocraft1800.none");
+    static Component islandLabel(String id) { return islandLabel(id, true); }
+    static Component islandLabel(String id, boolean withOwner) {
+        if (id == null) return Component.translatable("colony.annocraft1800.no_island");
         String owner = ClientState.owner(id);
         MutableComponent c = Component.translatable(id.startsWith("nw_") ? "colony.annocraft1800.island_new" : "colony.annocraft1800.island_old", id.replaceAll("\\D+", ""));
-        if (!owner.isEmpty() && !owner.equals(Diplomacy.PLAYER)) c.append(" (").append(Component.translatable("faction.annocraft1800." + owner)).append(")");
+        if (withOwner && !owner.isEmpty() && !owner.equals(Diplomacy.PLAYER)) c.append(" (").append(Component.translatable("faction.annocraft1800." + owner)).append(")");
         return c;
     }
     static Component goodLabel(String g) { return g == null ? Component.translatable("colony.annocraft1800.none") : Component.translatable("good.annocraft1800." + g); }
@@ -90,7 +91,7 @@ public final class ColonyScreen extends Screen {
     private void overviewWidgets() {
         boolean open = ClientState.economy.getBoolean("new_world_open");
         boolean inNew = IslandLayout.NEW_WORLD.equals(ClientState.world);
-        Button travel = button(Component.translatable(inNew ? "colony.annocraft1800.travel_old" : "colony.annocraft1800.travel_new"), 8, height - 20, 140,
+        Button travel = button(Component.translatable(inNew ? "colony.annocraft1800.travel_old" : "colony.annocraft1800.travel_new"), 8, height - 20, 150,
                 () -> AnnoNetwork.action("travel", "world", inNew ? IslandLayout.OLD_WORLD : IslandLayout.NEW_WORLD));
         travel.active = inNew || open;
         if (!open && !inNew) travel.setTooltip(Tooltip.create(Component.translatable("message.annocraft1800.new_world_locked")));
@@ -283,7 +284,7 @@ public final class ColonyScreen extends Screen {
                     .append(Component.translatable("colony.annocraft1800.relation", (int) c.getDouble("relation"))), 10, y, 0xffdfc783, width - 20);
             List<String> owned = new ArrayList<>();
             CompoundTag owners = ClientState.economy.getCompound("diplomacy").getCompound("owners");
-            for (String island : owners.getAllKeys()) if (owners.getString(island).equals(f)) owned.add(islandLabel(island).getString());
+            for (String island : owners.getAllKeys()) if (owners.getString(island).equals(f)) owned.add(islandLabel(island, false).getString());
             line(g, Component.translatable("faction.annocraft1800." + f + ".about").append(owned.isEmpty() ? "" : " · " + String.join(", ", owned)), 10, y + 11, 0xffc1d1d7, width - 20);
             y += 44;
         }
