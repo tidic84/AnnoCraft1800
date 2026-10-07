@@ -25,8 +25,8 @@
 Sur un monde neuf, sans bac à sable (`/anno status` ne doit pas afficher `sandbox`) :
 
 1. Construire un comptoir côtier : 500 or prélevés, 30 planches et 10 poissons dans le panneau de l’île. Une résidence sur une autre île est refusée faute de matériaux.
-2. Tracer une route depuis le comptoir, construire quatre résidences le long de cette route puis une pêcherie, une cabane de bûcheron et une scierie reliées. Sur A et B, les panneaux doivent afficher les mêmes stocks, le même trésor et le même statut pour chaque bâtiment.
-3. Laisser tourner dix minutes : les maisons atteignent 10/10, la main-d’œuvre paysanne couvre 30 postes, le stock de planches augmente et le solde par minute devient positif.
+2. Tracer une route depuis le comptoir, construire quatre résidences le long de cette route puis une pêcherie, une cabane de bûcheron, une scierie, un marché, une bergerie et un atelier de tricot reliés (besoins des paysans : poisson, vêtements de travail, marché). Sur A et B, les panneaux doivent afficher les mêmes stocks, le même trésor et le même statut pour chaque bâtiment.
+3. Laisser tourner dix minutes : les maisons atteignent 10/10, la main-d’œuvre paysanne couvre les postes, le stock de planches augmente et le solde par minute devient positif.
 4. Retirer une portion de route : les bâtiments isolés passent « Hors réseau routier », leur production s’arrête et la population de leurs maisons retombe à un habitant. Reconstruire la route rétablit l’activité.
 5. Démolir la pêcherie : le poisson s’épuise, les maisons affichent « Besoins non satisfaits » et leur population tombe à cinq.
 6. Améliorer une maison pleine et approvisionnée en résidence d’ouvriers : 100 or et 4 planches prélevés, capacité 20, main-d’œuvre paysanne réduite.
