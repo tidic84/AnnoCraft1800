@@ -1,0 +1,15 @@
+{
+  "name": "building.annocraft1800.tobacco_plantation",
+  "structure": "annocraft1800:tobacco_plantation",
+  "width": 9, "height": 5, "depth": 9,
+  "coastal": false, "level": 1,
+  "economy": {
+    "cost": {"coins": 2000, "timber": 6},
+    "upkeep": 30,
+    "workforce": {"tier": "laborers", "amount": 10},
+    "production": {"cycle": 60, "inputs": {}, "outputs": {"tobacco": 1}},
+    "requires": {"fertility": "tobacco"},
+    "world": "new",
+    "unlock": {"tier": "investors", "residents": 1}
+  }
+}

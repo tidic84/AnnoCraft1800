@@ -1,0 +1,15 @@
+{
+  "name": "building.annocraft1800.gold_mine",
+  "structure": "annocraft1800:gold_mine",
+  "width": 7, "height": 6, "depth": 7,
+  "coastal": false, "level": 1,
+  "economy": {
+    "cost": {"coins": 2000, "timber": 6},
+    "upkeep": 40,
+    "workforce": {"tier": "overseers", "amount": 20},
+    "production": {"cycle": 60, "inputs": {}, "outputs": {"gold": 1}},
+    "requires": {"deposit": "gold"},
+    "world": "new",
+    "unlock": {"tier": "engineers", "residents": 1}
+  }
+}

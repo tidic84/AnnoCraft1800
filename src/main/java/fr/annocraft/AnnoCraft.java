@@ -19,6 +19,12 @@ import net.minecraftforge.registries.*;
 public final class AnnoCraft {
     public static final String ID = "annocraft1800";
     public static final ResourceKey<Level> ARCHIPELAGO = ResourceKey.create(Registries.DIMENSION, id("archipelago"));
+    public static final ResourceKey<Level> NEW_WORLD = ResourceKey.create(Registries.DIMENSION, id("new_world"));
+    public static final java.util.List<ResourceKey<Level>> WORLDS = java.util.List.of(ARCHIPELAGO, NEW_WORLD);
+    /** True for the Old World archipelago and the New World: the dimensions holding the shared colony. */
+    public static boolean isColony(ResourceKey<Level> dimension) { return WORLDS.contains(dimension); }
+    public static String worldName(ResourceKey<Level> dimension) { return NEW_WORLD.equals(dimension) ? fr.annocraft.world.IslandLayout.NEW_WORLD : fr.annocraft.world.IslandLayout.OLD_WORLD; }
+    public static ResourceKey<Level> dimension(String world) { return fr.annocraft.world.IslandLayout.NEW_WORLD.equals(world) ? NEW_WORLD : ARCHIPELAGO; }
     public static final DeferredRegister<Codec<? extends ChunkGenerator>> GENERATORS = DeferredRegister.create(Registries.CHUNK_GENERATOR, ID);
     static { GENERATORS.register("archipelago", () -> ArchipelagoGenerator.CODEC); }
     public AnnoCraft(FMLJavaModLoadingContext context) {
@@ -31,6 +37,6 @@ public final class AnnoCraft {
         MinecraftForge.EVENT_BUS.register(ServerEvents.class);
         MinecraftForge.EVENT_BUS.addListener(this::reload);
     }
-    private void reload(AddReloadListenerEvent event) { event.addListener(new BuildingDefinitions()); }
+    private void reload(AddReloadListenerEvent event) { event.addListener(new BuildingDefinitions()); event.addListener(new fr.annocraft.server.CampaignDefinitions()); }
     public static ResourceLocation id(String path) { return ResourceLocation.fromNamespaceAndPath(ID, path); }
 }

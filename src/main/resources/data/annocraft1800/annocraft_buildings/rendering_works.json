@@ -1,0 +1,14 @@
+{
+  "name": "building.annocraft1800.rendering_works",
+  "structure": "annocraft1800:rendering_works",
+  "width": 7, "height": 7, "depth": 7,
+  "coastal": false, "level": 1,
+  "economy": {
+    "cost": {"coins": 500, "timber": 4},
+    "upkeep": 20,
+    "workforce": {"tier": "workers", "amount": 10},
+    "production": {"cycle": 60, "inputs": {"pigs": 1}, "outputs": {"tallow": 1}},
+    "world": "old",
+    "unlock": {"tier": "workers", "residents": 1}
+  }
+}

@@ -19,15 +19,17 @@ public final class ArchipelagoGenerator extends ChunkGenerator {
     public static final Codec<ArchipelagoGenerator> CODEC = RecordCodecBuilder.create(i -> i.group(
             BiomeSource.CODEC.fieldOf("biome_source").forGetter(g -> g.biomeSource),
             Codec.intRange(1024, 16384).optionalFieldOf("region_size", 4096).forGetter(g -> g.size),
-            Codec.intRange(1, 32).optionalFieldOf("island_count", 8).forGetter(g -> g.count)
+            Codec.intRange(1, 32).optionalFieldOf("island_count", 8).forGetter(g -> g.count),
+            Codec.STRING.optionalFieldOf("world", IslandLayout.OLD_WORLD).forGetter(g -> g.world)
     ).apply(i, ArchipelagoGenerator::new));
     private final int size, count;
+    private final String world;
     private volatile IslandLayout layout;
-    public ArchipelagoGenerator(BiomeSource biomeSource, int size, int count) {
-        super(biomeSource); this.size = size; this.count = count;
+    public ArchipelagoGenerator(BiomeSource biomeSource, int size, int count, String world) {
+        super(biomeSource); this.size = size; this.count = count; this.world = world;
     }
     @Override public ChunkGeneratorStructureState createState(HolderLookup<StructureSet> sets, RandomState state, long seed) {
-        layout = new IslandLayout(seed, size, count);
+        layout = new IslandLayout(seed, size, count, world);
         return ChunkGeneratorStructureState.createForNormal(state, seed, biomeSource, sets);
     }
     public IslandLayout layout() {

@@ -28,7 +28,7 @@ public final class RoadService {
         List<BlockPos> grounds = new ArrayList<>();
         for (int[] t : path(from.getX(), from.getZ(), to.getX(), to.getZ())) {
             BlockPos ground = new BlockPos(t[0], layout.height(t[0], t[1]), t[1]);
-            if (data.road(ground)) continue;
+            if (data.road(layout.world(), ground)) continue;
             BuildingService.Result check = validate(level, data, layout, ground);
             if (!check.success()) return check;
             grounds.add(ground);
@@ -37,7 +37,7 @@ public final class RoadService {
         for (BlockPos ground : grounds) {
             CompoundTag original = BuildingService.blockBackup(level, ground);
             level.setBlock(ground, Blocks.DIRT_PATH.defaultBlockState(), 2);
-            data.putRoad(ground, original);
+            data.putRoad(layout.world(), ground, original);
         }
         refresh(level, from, to); return BuildingService.Result.ok();
     }
@@ -49,14 +49,14 @@ public final class RoadService {
         List<BlockPos> grounds = new ArrayList<>();
         for (int[] t : path(from.getX(), from.getZ(), to.getX(), to.getZ())) {
             BlockPos ground = new BlockPos(t[0], layout.height(t[0], t[1]), t[1]);
-            if (!data.road(ground)) continue;
+            if (!data.road(layout.world(), ground)) continue;
             if (!BuildingService.loaded(level, ground, 1, 1)) return BuildingService.Result.fail("not_loaded");
             grounds.add(ground);
         }
         if (grounds.isEmpty()) return BuildingService.Result.fail("no_road");
         for (BlockPos ground : grounds) {
-            ListTag original = new ListTag(); original.add(data.roads().get(ground.asLong()).copy());
-            BuildingService.restore(level, original); data.removeRoad(ground);
+            ListTag original = new ListTag(); original.add(data.roadOriginal(layout.world(), ground).copy());
+            BuildingService.restore(level, original); data.removeRoad(layout.world(), ground);
         }
         refresh(level, from, to); return BuildingService.Result.ok();
     }
@@ -65,7 +65,7 @@ public final class RoadService {
         if (!layout.inBounds(x, z)) return BuildingService.Result.fail("outside_bounds");
         if (layout.islandAt(x, z).isEmpty() || ground.getY() <= IslandLayout.SEA_LEVEL) return BuildingService.Result.fail("invalid_terrain");
         if (!BuildingService.loaded(level, ground, 1, 1)) return BuildingService.Result.fail("not_loaded");
-        for (BuildingInstance b : data.buildings().values()) if (b.overlaps(ground, 1, 1)) return BuildingService.Result.fail("overlap");
+        for (BuildingInstance b : data.buildings().values()) if (fr.annocraft.economy.ColonyEconomy.worldOf(b.island()).equals(layout.world()) && b.overlaps(ground, 1, 1)) return BuildingService.Result.fail("overlap");
         if (!level.getBlockState(ground).isSolidRender(level, ground) || !level.getFluidState(ground).isEmpty()) return BuildingService.Result.fail("invalid_terrain");
         if (!level.getBlockState(ground.above()).isAir()) return BuildingService.Result.fail("obstructed");
         return BuildingService.Result.ok();

@@ -1,0 +1,14 @@
+{
+  "name": "building.annocraft1800.charcoal_kiln",
+  "structure": "annocraft1800:charcoal_kiln",
+  "width": 5, "height": 6, "depth": 5,
+  "coastal": false, "level": 1,
+  "economy": {
+    "cost": {"coins": 300, "timber": 4},
+    "upkeep": 15,
+    "workforce": {"tier": "workers", "amount": 10},
+    "production": {"cycle": 30, "inputs": {"wood": 1}, "outputs": {"coal": 1}},
+    "world": "any",
+    "unlock": {"tier": "workers", "residents": 1}
+  }
+}

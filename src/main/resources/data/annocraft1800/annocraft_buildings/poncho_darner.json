@@ -1,0 +1,13 @@
+{
+  "name": "building.annocraft1800.poncho_darner",
+  "structure": "annocraft1800:poncho_darner",
+  "width": 7, "height": 7, "depth": 7,
+  "coastal": false, "level": 1,
+  "economy": {
+    "cost": {"coins": 150, "timber": 2},
+    "upkeep": 10,
+    "workforce": {"tier": "laborers", "amount": 15},
+    "production": {"cycle": 30, "inputs": {"alpaca_wool": 1}, "outputs": {"ponchos": 1}},
+    "world": "new"
+  }
+}

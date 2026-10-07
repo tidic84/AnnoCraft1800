@@ -4,6 +4,7 @@ import fr.annocraft.AnnoCraft;
 import fr.annocraft.building.*;
 import fr.annocraft.economy.*;
 import fr.annocraft.network.AnnoNetwork;
+import fr.annocraft.world.IslandLayout;
 import net.minecraft.client.gui.*;
 import net.minecraft.client.gui.components.*;
 import net.minecraft.client.gui.screens.Screen;
@@ -14,34 +15,67 @@ import org.lwjgl.glfw.GLFW;
 import java.util.*;
 
 public final class RtsScreen extends Screen {
-    private static final int SIDE = 142, BAR = 48, ROW = 16;
+    private static final int SIDE = 142, BAR = 48, ROW = 16, LIST_TOP = 46;
+    static final List<String> CATEGORIES = List.of("infrastructure", "housing", "services", "farmers", "workers", "artisans", "engineers", "investors", "new_world");
+    private static String category = "infrastructure";
+    private static int scroll;
+    /** Set while a child screen (colony management) replaces this one, so the camera stays in RTS mode. */
+    static boolean keepCamera;
     private int panel;
     private Button upgrade, demolish;
     public RtsScreen() { super(Component.translatable("screen.annocraft1800.title")); }
-    /** Storage first, then housing, then production: the order a new island is founded in. */
-    private static int menuOrder(BuildingDefinition d) {
+    static String category(BuildingDefinition d) {
         EconomyProfile e = d.economy();
-        return e.storageNode() ? (d.coastal() ? 0 : 1) : e.housing() ? 2 : e.producer() ? 3 : 4;
+        if (e.housing()) return "housing";
+        if (e.storageNode() || e.shipyard() || e.defense() > 0) return "infrastructure";
+        if (e.serviceProvider()) return "services";
+        if (IslandLayout.NEW_WORLD.equals(e.world())) return "new_world";
+        return e.unlockTier() == null ? "farmers" : e.unlockTier();
     }
+    private static List<BuildingDefinition> catalogue(String cat) {
+        return ClientState.DEFINITIONS.values().stream()
+                .filter(d -> d.level() == 1 && d.economy().buildableIn(ClientState.world) && category(d).equals(cat)).toList();
+    }
+    private static List<String> categories() { return CATEGORIES.stream().filter(c -> !catalogue(c).isEmpty()).toList(); }
+    static boolean unlocked(EconomyProfile e) {
+        CompoundTag eco = ClientState.economy;
+        return eco.getBoolean("sandbox") || e.unlockTier() == null || eco.getCompound("population").getInt(e.unlockTier()) >= e.unlockResidents();
+    }
+    private int rows() { return Math.max(1, (height - 42 - LIST_TOP) / ROW); }
     @Override protected void init() {
         panel = Math.min(210, Math.max(SIDE, width / 3));
-        int y = 44;
-        List<BuildingDefinition> catalogue = ClientState.DEFINITIONS.values().stream().filter(d -> d.level() == 1)
-                .sorted(Comparator.comparingInt(RtsScreen::menuOrder).thenComparing(d -> d.id().toString())).toList();
-        for (BuildingDefinition def : catalogue) {
-            addRenderableWidget(Button.builder(Component.translatable(def.name()), b -> {
+        addRenderableWidget(Button.builder(Component.translatable("screen.annocraft1800.colony"), b -> openColony()).bounds(panel - 58, 3, 50, 12)
+                .tooltip(Tooltip.create(Component.translatable("screen.annocraft1800.colony_help"))).build());
+        List<String> cats = categories();
+        if (!cats.contains(category) && !cats.isEmpty()) category = cats.get(0);
+        addRenderableWidget(Button.builder(Component.literal("‹"), b -> shiftCategory(-1)).bounds(8, 28, 14, 14).build());
+        addRenderableWidget(Button.builder(Component.translatable("category.annocraft1800." + category), b -> shiftCategory(1)).bounds(24, 28, panel - 48, 14).build());
+        addRenderableWidget(Button.builder(Component.literal("›"), b -> shiftCategory(1)).bounds(panel - 22, 28, 14, 14).build());
+        List<BuildingDefinition> list = catalogue(category);
+        scroll = Math.max(0, Math.min(scroll, list.size() - rows()));
+        int y = LIST_TOP;
+        for (BuildingDefinition def : list.subList(scroll, Math.min(list.size(), scroll + rows()))) {
+            Button b = addRenderableWidget(Button.builder(Component.translatable(def.name()), x -> {
                         RtsController.placement = def; RtsController.rotation = 0; RtsController.roadMode = 0; RtsController.roadStart = null; ClientState.selected = null; })
-                    .bounds(8, y, panel - 16, ROW - 2).tooltip(Tooltip.create(describe(def))).build()); y += ROW;
+                    .bounds(8, y, panel - 16, ROW - 2).tooltip(Tooltip.create(describe(def))).build());
+            b.active = unlocked(def.economy());
+            y += ROW;
         }
         addRenderableWidget(Button.builder(Component.translatable("screen.annocraft1800.road"), b -> road(1))
-                .bounds(8, y, (panel - 20) / 2, ROW - 2).tooltip(Tooltip.create(Component.translatable("screen.annocraft1800.road_help"))).build());
+                .bounds(8, height - 40, (panel - 20) / 2, ROW - 2).tooltip(Tooltip.create(Component.translatable("screen.annocraft1800.road_help"))).build());
         addRenderableWidget(Button.builder(Component.translatable("screen.annocraft1800.road_remove"), b -> road(2))
-                .bounds(12 + (panel - 20) / 2, y, (panel - 20) / 2, ROW - 2).build());
+                .bounds(12 + (panel - 20) / 2, height - 40, (panel - 20) / 2, ROW - 2).build());
         int right = width - SIDE - 6, buttonsY = height - BAR - 20;
         upgrade = addRenderableWidget(Button.builder(Component.translatable("screen.annocraft1800.upgrade"), b -> command(2)).bounds(right + 4, buttonsY, SIDE / 2 - 6, ROW - 2).build());
         demolish = addRenderableWidget(Button.builder(Component.translatable("screen.annocraft1800.demolish"), b -> command(1)).bounds(right + SIDE / 2 + 1, buttonsY, SIDE / 2 - 6, ROW - 2).build());
         addRenderableWidget(Button.builder(Component.translatable("screen.annocraft1800.visit"), b -> onClose()).bounds(8, height - 22, panel - 16, ROW + 2).build());
     }
+    private void shiftCategory(int delta) {
+        List<String> cats = categories(); if (cats.isEmpty()) return;
+        category = cats.get(Math.floorMod(cats.indexOf(category) + delta, cats.size())); scroll = 0;
+        clearWidgets(); init();
+    }
+    void openColony() { keepCamera = true; minecraft.setScreen(new ColonyScreen(this)); keepCamera = false; }
     private static void road(int mode) { RtsController.roadMode = mode; RtsController.roadStart = null; RtsController.placement = null; ClientState.selected = null; }
     private void command(int action) {
         if (ClientState.selected != null) AnnoNetwork.CHANNEL.sendToServer(new AnnoNetwork.BuildCommand(action, AnnoCraft.id("residence"), BlockPos.ZERO, 0, ClientState.selected));
@@ -55,6 +89,11 @@ public final class RtsScreen extends Screen {
         }
         return first ? Component.translatable("screen.annocraft1800.free") : c;
     }
+    static MutableComponent names(List<String> ids, String prefix) {
+        MutableComponent c = Component.empty();
+        for (int i = 0; i < ids.size(); i++) { if (i > 0) c.append(", "); c.append(Component.translatable(prefix + ids.get(i))); }
+        return c;
+    }
     static Component describe(BuildingDefinition def) {
         EconomyProfile e = def.economy();
         MutableComponent c = Component.translatable(def.name()).withStyle(net.minecraft.ChatFormatting.GOLD)
@@ -67,10 +106,19 @@ public final class RtsScreen extends Screen {
                 : Component.translatable("tooltip.annocraft1800.converts", amounts(e.inputs()), amounts(e.outputs()), e.cycle()));
         if (e.housing()) {
             c.append("\n").append(Component.translatable("tooltip.annocraft1800.housing", e.capacity(), Component.translatable("tier.annocraft1800." + e.houseTier())));
-            Map<String, String> needs = new TreeMap<>(); e.needs().forEach((k, v) -> needs.put(k, String.format(Locale.ROOT, "%.2f", v)));
-            if (!needs.isEmpty()) c.append("\n").append(Component.translatable("tooltip.annocraft1800.needs", amounts(needs)));
+            if (!e.needs().isEmpty()) c.append("\n").append(Component.translatable("tooltip.annocraft1800.needs", names(List.copyOf(e.needs().keySet()), "good.annocraft1800.")));
+            if (!e.services().isEmpty()) c.append("\n").append(Component.translatable("tooltip.annocraft1800.services", names(e.services(), "building.annocraft1800.")));
+            List<String> luxury = new ArrayList<>(); e.luxury().keySet().forEach(k -> luxury.add("good.annocraft1800." + k)); e.luxuryServices().forEach(k -> luxury.add("building.annocraft1800." + k));
+            if (!luxury.isEmpty()) c.append("\n").append(Component.translatable("tooltip.annocraft1800.luxury", names(luxury, "")));
         }
+        if (e.serviceProvider()) c.append("\n").append(Component.translatable("tooltip.annocraft1800.service", e.radius()));
+        if (e.fertility() != null) c.append("\n").append(Component.translatable("tooltip.annocraft1800.fertility", Component.translatable("resource.annocraft1800." + e.fertility())));
+        if (e.deposit() != null) c.append("\n").append(Component.translatable("tooltip.annocraft1800.deposit", Component.translatable("resource.annocraft1800." + e.deposit())));
+        if (e.shipyard()) c.append("\n").append(Component.translatable("tooltip.annocraft1800.shipyard"));
+        if (e.defense() > 0) c.append("\n").append(Component.translatable("tooltip.annocraft1800.defense", e.defense()));
         if (def.coastal()) c.append("\n").append(Component.translatable("tooltip.annocraft1800.coastal"));
+        if (e.unlockTier() != null) c.append("\n").append(Component.translatable("tooltip.annocraft1800.unlock", e.unlockResidents(), Component.translatable("tier.annocraft1800." + e.unlockTier()))
+                .withStyle(unlocked(e) ? net.minecraft.ChatFormatting.GRAY : net.minecraft.ChatFormatting.RED));
         return c;
     }
     private boolean overUi(double x, double y) {
@@ -86,12 +134,20 @@ public final class RtsScreen extends Screen {
     private int islandLines() {
         String id = currentIsland(); if (id == null) return 1;
         CompoundTag island = ClientState.island(id);
-        return 1 + goods(island).size() + island.getCompound("workforce").getAllKeys().size();
+        return 3 + goods(island).size() + island.getCompound("workforce").getAllKeys().size();
     }
     private static Set<String> goods(CompoundTag island) {
         Set<String> goods = new TreeSet<>(island.getCompound("stock").getAllKeys()); goods.addAll(island.getCompound("rates").getAllKeys()); return goods;
     }
-    private static String islandName(String id) { return id.startsWith("island_") ? id.substring(7) : id; }
+    static String islandName(String id) {
+        if (id.startsWith("nw_island_")) return "NM " + id.substring(10);
+        return id.startsWith("island_") ? id.substring(7) : id;
+    }
+    private static IslandLayout.Island islandData(String id) {
+        for (IslandLayout l : ClientState.LAYOUTS.values()) { var i = l.island(id); if (i.isPresent()) return i.get(); }
+        return null;
+    }
+    private static List<String> split(String list) { return list == null || list.isEmpty() ? List.of() : Arrays.asList(list.split(",")); }
     @Override public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
         if (!overUi(mouseX, mouseY)) RtsController.pick(mouseX, mouseY, width, height);
         else RtsController.hover = null;
@@ -99,21 +155,31 @@ public final class RtsScreen extends Screen {
         // Left: finances and catalogue.
         g.fill(0, 0, panel, height, 0xe6192730);
         g.fill(panel - 2, 0, panel, height, 0xffc9a85c);
-        g.drawString(font, Component.literal("ANNOCRAFT 1800"), 8, 6, 0xffdfc783, false);
-        if (economy.getBoolean("sandbox")) g.drawString(font, font.plainSubstrByWidth(Component.translatable("screen.annocraft1800.sandbox").getString(), panel - 16), 8, 18, 0xffa2b6bf, false);
+        g.drawString(font, Component.literal("ANNOCRAFT"), 8, 5, 0xffdfc783, false);
+        if (economy.getBoolean("sandbox")) g.drawString(font, font.plainSubstrByWidth(Component.translatable("screen.annocraft1800.sandbox").getString(), panel - 16), 8, 17, 0xffa2b6bf, false);
         else {
             long balance = Math.round(economy.getDouble("income") - economy.getDouble("upkeep"));
             g.drawString(font, font.plainSubstrByWidth(Component.translatable("screen.annocraft1800.balance", (long) Math.floor(economy.getDouble("coins")), (balance >= 0 ? "+" : "") + balance).getString(), panel - 16),
-                    8, 18, balance >= 0 ? 0xff88d4a0 : 0xffff8b7a, false);
+                    8, 17, balance >= 0 ? 0xff88d4a0 : 0xffff8b7a, false);
         }
-        g.drawString(font, Component.translatable("screen.annocraft1800.catalogue"), 8, 32, 0xffffffff, false);
-        // Top right: island stocks, flows and workforce.
+        List<BuildingDefinition> list = catalogue(category);
+        if (list.size() > rows()) g.drawString(font, (scroll + 1) + "-" + Math.min(list.size(), scroll + rows()) + "/" + list.size(), panel - 40, height - 52, 0xff8090a0, false);
+        // Top right: island ownership, resources, stocks, flows and workforce.
         String islandId = currentIsland(); int right = width - SIDE - 6;
         g.fill(right, 6, width - 6, 12 + 10 * islandLines(), 0xd0192730);
         if (islandId == null) g.drawString(font, Component.translatable("screen.annocraft1800.ocean"), right + 4, 9, 0xffa2b6bf, false);
         else {
             CompoundTag island = ClientState.island(islandId); int y = 9;
-            g.drawString(font, Component.translatable("screen.annocraft1800.island_stock", islandName(islandId), island.getInt("capacity")), right + 4, y, 0xffdfc783, false);
+            String owner = ClientState.owner(islandId);
+            Component title = owner.isEmpty() ? Component.translatable("screen.annocraft1800.island_free", islandName(islandId))
+                    : owner.equals(Diplomacy.PLAYER) ? Component.translatable("screen.annocraft1800.island_stock", islandName(islandId), island.getInt("capacity"))
+                    : Component.translatable("screen.annocraft1800.island_owner", islandName(islandId), Component.translatable("faction.annocraft1800." + owner));
+            g.drawString(font, font.plainSubstrByWidth(title.getString(), SIDE - 8), right + 4, y, 0xffdfc783, false);
+            IslandLayout.Island data = islandData(islandId);
+            if (data != null) {
+                y += 10; g.drawString(font, font.plainSubstrByWidth(Component.translatable("screen.annocraft1800.fertility", names(split(data.fertility()), "resource.annocraft1800.")).getString(), SIDE - 8), right + 4, y, 0xffa2d18a, false);
+                y += 10; g.drawString(font, font.plainSubstrByWidth(Component.translatable("screen.annocraft1800.deposits", names(split(data.deposit()), "resource.annocraft1800.")).getString(), SIDE - 8), right + 4, y, 0xffc9b38a, false);
+            } else y += 20;
             for (String id : goods(island)) {
                 double rate = island.getCompound("rates").getDouble(id);
                 String flow = Math.abs(rate) < .05 ? "" : String.format(Locale.ROOT, " (%+.1f/min)", rate);
@@ -148,7 +214,7 @@ public final class RtsScreen extends Screen {
                 EconomyProfile e = def.economy(); Component first = null, second = null;
                 if (e.housing()) {
                     first = Component.translatable("screen.annocraft1800.residents", (int) Math.floor(site.getDouble("residents") + 1e-6), e.capacity());
-                    second = Component.translatable("screen.annocraft1800.supply", Math.round(site.getDouble("supply") * 100));
+                    second = Component.translatable("screen.annocraft1800.supply", Math.round(site.getDouble("supply") * 100), Math.round(site.getDouble("luxury") * 100));
                 } else if (e.producer()) {
                     first = Component.translatable("screen.annocraft1800.productivity", Math.round(site.getDouble("productivity") * 100));
                     second = Component.translatable("screen.annocraft1800.progress", Math.round(site.getDouble("progress") * 100));
@@ -164,7 +230,7 @@ public final class RtsScreen extends Screen {
                 : Component.translatable("screen.annocraft1800.controls");
         g.drawString(font, font.plainSubstrByWidth(help.getString(), width - panel - 16), panel + 8, height - 42, 0xffdfc783, false);
         if (!ClientState.message.isEmpty()) g.drawString(font, font.plainSubstrByWidth(Component.translatable(ClientState.message).getString(), width - panel - 16), panel + 8, height - 28, ClientState.messageSuccess ? 0xff88d4a0 : 0xffff8b7a, false);
-        g.drawString(font, font.plainSubstrByWidth(Component.translatable("screen.annocraft1800.stats", ClientState.BUILDINGS.size(), (int)RtsController.zoom).getString(), width - panel - 16), panel + 8, height - 14, 0xffc1d1d7, false);
+        g.drawString(font, font.plainSubstrByWidth(Component.translatable("screen.annocraft1800.stats", ClientState.visible().size(), (int)RtsController.zoom).getString(), width - panel - 16), panel + 8, height - 14, 0xffc1d1d7, false);
         super.render(g, mouseX, mouseY, partialTick);
     }
     @Override public boolean mouseClicked(double x, double y, int button) {
@@ -173,13 +239,26 @@ public final class RtsScreen extends Screen {
         if (button == 1) { RtsController.placement = null; RtsController.roadMode = 0; RtsController.roadStart = null; ClientState.selected = null; return true; }
         return false;
     }
-    @Override public boolean mouseScrolled(double x, double y, double delta) { RtsController.zoom = CameraMath.zoom(RtsController.zoom - (float)delta * 3); return true; }
+    @Override public boolean mouseScrolled(double x, double y, double delta) {
+        if (x <= panel) {
+            int before = scroll; scroll = Math.max(0, Math.min(catalogue(category).size() - rows(), scroll - (int) Math.signum(delta)));
+            if (scroll != before) { clearWidgets(); init(); }
+            return true;
+        }
+        RtsController.zoom = CameraMath.zoom(RtsController.zoom - (float)delta * 3); return true;
+    }
     @Override public boolean keyPressed(int key, int scan, int modifiers) {
         if (key == GLFW.GLFW_KEY_R) { RtsController.rotation = (RtsController.rotation + 1) % 4; return true; }
         if (key == GLFW.GLFW_KEY_F6) { onClose(); return true; }
+        if (RtsController.COLONY.matches(key, scan)) { openColony(); return true; }
         return super.keyPressed(key, scan, modifiers);
     }
+    @Override public void tick() {
+        // Unlocks change with population: refresh the catalogue when the economy snapshot changes.
+        if (ClientState.economy != lastEconomy) { lastEconomy = ClientState.economy; clearWidgets(); init(); }
+    }
+    private CompoundTag lastEconomy;
     @Override public boolean isPauseScreen() { return false; }
     @Override public void onClose() { RtsController.exit(); super.onClose(); }
-    @Override public void removed() { if (RtsController.active) RtsController.exit(); }
+    @Override public void removed() { if (RtsController.active && !keepCamera) RtsController.exit(); }
 }

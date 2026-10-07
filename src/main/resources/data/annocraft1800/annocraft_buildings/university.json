@@ -1,0 +1,13 @@
+{
+  "name": "building.annocraft1800.university",
+  "structure": "annocraft1800:university",
+  "width": 9, "height": 12, "depth": 9,
+  "coastal": false, "level": 1,
+  "economy": {
+    "cost": {"coins": 4000, "bricks": 10, "steel_beams": 4},
+    "upkeep": 80,
+    "service": {"id": "university", "radius": 50},
+    "world": "old",
+    "unlock": {"tier": "engineers", "residents": 1}
+  }
+}

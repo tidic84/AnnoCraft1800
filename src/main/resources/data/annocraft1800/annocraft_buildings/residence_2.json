@@ -1,2 +1,12 @@
-{"name":"building.annocraft1800.residence_2","structure":"annocraft1800:residence_2","width":7,"height":9,"depth":7,"coastal":false,"level":2,
-  "economy":{"cost":{"coins":100,"timber":4},"housing":{"tier":"workers","capacity":20,"tax":2.0,"needs":{"fish":0.05}}}}
+{
+  "name": "building.annocraft1800.residence_2",
+  "structure": "annocraft1800:residence_2",
+  "width": 7, "height": 9, "depth": 7,
+  "coastal": false, "level": 2,
+  "upgrade": "annocraft1800:residence_3",
+  "economy": {
+    "cost": {"coins": 100, "timber": 4},
+    "housing": {"tier": "workers", "capacity": 20, "tax": 2, "needs": {"fish": 0.025, "work_clothes": 0.02, "sausages": 0.02, "bread": 0.02}, "luxury": {"beer": 0.02, "soap": 0.015}, "services": ["market", "school"], "luxury_services": ["church"]},
+    "world": "old"
+  }
+}

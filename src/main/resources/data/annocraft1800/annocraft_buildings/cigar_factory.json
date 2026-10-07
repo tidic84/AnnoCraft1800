@@ -1,0 +1,14 @@
+{
+  "name": "building.annocraft1800.cigar_factory",
+  "structure": "annocraft1800:cigar_factory",
+  "width": 9, "height": 7, "depth": 7,
+  "coastal": false, "level": 1,
+  "economy": {
+    "cost": {"coins": 3000, "timber": 8},
+    "upkeep": 60,
+    "workforce": {"tier": "overseers", "amount": 20},
+    "production": {"cycle": 60, "inputs": {"tobacco": 1, "wood": 1}, "outputs": {"cigars": 1}},
+    "world": "new",
+    "unlock": {"tier": "investors", "residents": 1}
+  }
+}

@@ -104,9 +104,10 @@ public final class FoundationGameTests {
     }
     @GameTest(template = "empty", templateNamespace = AnnoCraft.ID, timeoutTicks = 400)
     public static void economyCostsRoadsAndMigration(GameTestHelper h) {
-        ServerLevel l = region(h); ServerPlayer p = player(l, "economy_tester"); BlockPos at = center(l, 5); load(l, at, 2);
+        ServerLevel l = region(h); ServerPlayer p = player(l, "economy_tester"); BlockPos at = center(l, 4).offset(-20, 0, -20); load(l, at, 2);
         ColonyData data = ColonyData.get(l.getServer()); var economy = data.economy();
         String island = BuildingService.generator(l).layout().islandAt(at.getX(), at.getZ()).orElseThrow().id();
+        data.diplomacy().claim(island);
         // Synchronous section: other GameTests in the batch expect sandbox mode between ticks.
         data.setSandbox(false);
         try {
@@ -127,7 +128,7 @@ public final class FoundationGameTests {
             BlockPos from = new BlockPos(at.getX() - 1, 0, at.getZ()), to = new BlockPos(at.getX() - 1, 0, at.getZ() + 14);
             h.assertTrue(RoadService.place(p, from, to).success(), "Road placement failed");
             BlockPos ground = new BlockPos(at.getX() - 1, 73, at.getZ() + 3);
-            h.assertTrue(data.road(ground) && l.getBlockState(ground).is(net.minecraft.world.level.block.Blocks.DIRT_PATH), "Road block missing");
+            h.assertTrue(data.road("old", ground) && l.getBlockState(ground).is(net.minecraft.world.level.block.Blocks.DIRT_PATH), "Road block missing");
             h.assertTrue(data.roads().size() == 15, "Road length incorrect: " + data.roads().size());
             var event = new net.minecraftforge.event.level.BlockEvent.BreakEvent(l, ground, l.getBlockState(ground), p);
             net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(event);

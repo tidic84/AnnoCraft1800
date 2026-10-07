@@ -1,0 +1,14 @@
+{
+  "name": "building.annocraft1800.coffee_roaster",
+  "structure": "annocraft1800:coffee_roaster",
+  "width": 7, "height": 7, "depth": 7,
+  "coastal": false, "level": 1,
+  "economy": {
+    "cost": {"coins": 1500, "timber": 6},
+    "upkeep": 30,
+    "workforce": {"tier": "overseers", "amount": 15},
+    "production": {"cycle": 60, "inputs": {"coffee_beans": 1}, "outputs": {"coffee": 1}},
+    "world": "new",
+    "unlock": {"tier": "engineers", "residents": 1}
+  }
+}

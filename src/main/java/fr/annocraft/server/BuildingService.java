@@ -28,7 +28,10 @@ public final class BuildingService {
         if (!validation.success()) return validation;
         StructureTemplate template = template(level, def);
         if (template == null) return Result.fail("missing_structure");
-        String island = generator(level).layout().islandAt(origin.getX(), origin.getZ()).orElseThrow().id();
+        IslandLayout.Island isle = generator(level).layout().islandAt(origin.getX(), origin.getZ()).orElseThrow();
+        String island = isle.id();
+        Result rules = rules(data, def, isle, generator(level).layout().world());
+        if (!rules.success()) return rules;
         String cost = data.economy().checkCost(island, def.economy());
         if (cost != null) return Result.fail(cost);
         ListTag backup = backup(level, origin, def.width(rotation), def.height(), def.depth(rotation));
@@ -39,6 +42,17 @@ public final class BuildingService {
         }
         data.economy().pay(island, def.economy());
         data.put(instance); CameraSessions.refresh(level, origin, instance.width(), instance.depth()); return Result.ok();
+    }
+    /** Economic placement rules: world, island ownership, founding order, fertility, deposits and unlocks. */
+    public static Result rules(ColonyData data, BuildingDefinition def, IslandLayout.Island island, String world) {
+        var e = def.economy(); var economy = data.economy();
+        if (!e.buildableIn(world)) return Result.fail("wrong_world");
+        if (!data.diplomacy().playerMayBuild(island.id())) return Result.fail("foreign_island");
+        if (!economy.sandbox() && data.diplomacy().owner(island.id()) == null && !e.storageNode()) return Result.fail("needs_trading_post");
+        if (e.fertility() != null && !island.hasFertility(e.fertility())) return Result.fail("no_fertility");
+        if (e.deposit() != null && !island.hasDeposit(e.deposit())) return Result.fail("no_deposit");
+        if (!economy.unlocked(e)) return Result.fail("locked");
+        return Result.ok();
     }
     public static Result demolish(ServerPlayer player, UUID id) {
         if (!allowed(player)) return Result.fail("wrong_region");
@@ -76,7 +90,7 @@ public final class BuildingService {
         CameraSessions.refresh(level, old.origin(), old.width(), old.depth());
         return Result.ok();
     }
-    public static boolean allowed(ServerPlayer p) { return p.level().dimension().equals(AnnoCraft.ARCHIPELAGO) && !p.isSpectator(); }
+    public static boolean allowed(ServerPlayer p) { return AnnoCraft.isColony(p.level().dimension()) && !p.isSpectator(); }
     public static ArchipelagoGenerator generator(ServerLevel level) { return (ArchipelagoGenerator) level.getChunkSource().getGenerator(); }
     public static Result validate(ServerLevel level, ColonyData data, BuildingDefinition def, BlockPos p, int rotation, UUID except) {
         int w = def.width(rotation), d = def.depth(rotation);
@@ -84,9 +98,10 @@ public final class BuildingService {
         if (!layout.inBounds(p.getX(), p.getZ()) || !layout.inBounds(p.getX() + w - 1, p.getZ() + d - 1)
                 || p.getY() < 1 || p.getY() + def.height() >= level.getMaxBuildHeight()) return Result.fail("outside_bounds");
         if (!loaded(level, p, w, d)) return Result.fail("not_loaded");
-        for (BuildingInstance b : data.buildings().values()) if (!b.id().equals(except) && b.overlaps(p, w, d)) return Result.fail("overlap");
+        for (BuildingInstance b : data.buildings().values())
+            if (!b.id().equals(except) && fr.annocraft.economy.ColonyEconomy.worldOf(b.island()).equals(layout.world()) && b.overlaps(p, w, d)) return Result.fail("overlap");
         if (except == null) for (int x = 0; x < w; x++) for (int z = 0; z < d; z++)
-            if (data.roadTiles().contains(fr.annocraft.economy.ColonyEconomy.pack(p.getX() + x, p.getZ() + z))) return Result.fail("overlap");
+            if (data.roadTiles().contains(ColonyData.tile(layout.world(), p.getX() + x, p.getZ() + z))) return Result.fail("overlap");
         Optional<IslandLayout.Island> candidate = layout.islandAt(p.getX(), p.getZ());
         if (candidate.isEmpty()) return Result.fail("invalid_terrain");
         IslandLayout.Island island = candidate.get();

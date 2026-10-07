@@ -1,0 +1,13 @@
+{
+  "name": "building.annocraft1800.sheep_farm",
+  "structure": "annocraft1800:sheep_farm",
+  "width": 9, "height": 5, "depth": 9,
+  "coastal": false, "level": 1,
+  "economy": {
+    "cost": {"coins": 100, "timber": 2},
+    "upkeep": 5,
+    "workforce": {"tier": "farmers", "amount": 5},
+    "production": {"cycle": 30, "inputs": {}, "outputs": {"wool": 1}},
+    "world": "old"
+  }
+}

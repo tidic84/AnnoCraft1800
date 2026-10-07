@@ -16,7 +16,7 @@ import java.util.*;
 import java.util.function.Supplier;
 
 public final class AnnoNetwork {
-    public static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(AnnoCraft.id("main"), () -> "2", "2"::equals, "2"::equals);
+    public static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(AnnoCraft.id("main"), () -> "3", "3"::equals, "3"::equals);
     public record BuildCommand(int action, ResourceLocation definition, BlockPos origin, int rotation, UUID target) {
         public void encode(FriendlyByteBuf b) { b.writeVarInt(action); b.writeResourceLocation(definition); b.writeBlockPos(origin); b.writeVarInt(rotation); b.writeUUID(target); }
         public static BuildCommand decode(FriendlyByteBuf b) { return new BuildCommand(b.readVarInt(), b.readResourceLocation(), b.readBlockPos(), b.readVarInt(), b.readUUID()); }
@@ -67,7 +67,7 @@ public final class AnnoNetwork {
         public static void handle(SyncRequest m, Supplier<NetworkEvent.Context> ctx) {
             ctx.get().enqueueWork(() -> {
                 ServerPlayer p = ctx.get().getSender();
-                if (p != null && p.level().dimension().equals(AnnoCraft.ARCHIPELAGO) && ServerEvents.acceptSync(p)) sync(p);
+                if (p != null && AnnoCraft.isColony(p.level().dimension()) && ServerEvents.acceptSync(p)) sync(p);
             }); ctx.get().setPacketHandled(true);
         }
     }
@@ -103,9 +103,26 @@ public final class AnnoNetwork {
             ctx.get().setPacketHandled(true);
         }
     }
+    /** Management-screen action: fleet, trade, diplomacy, campaign or travel. */
+    public record ActionCommand(String action, CompoundTag args) {
+        public void encode(FriendlyByteBuf b) { b.writeUtf(action, 32); b.writeNbt(args); }
+        public static ActionCommand decode(FriendlyByteBuf b) { return new ActionCommand(b.readUtf(32), b.readNbt()); }
+        public static void handle(ActionCommand m, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get().enqueueWork(() -> {
+                ServerPlayer p = ctx.get().getSender(); if (p == null) return;
+                if (!ServerEvents.acceptCommand(p)) {
+                    CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), new Feedback(false, "message.annocraft1800.rate_limited")); return;
+                }
+                BuildingService.Result result = ColonyActions.handle(p, m.action, m.args == null ? new CompoundTag() : m.args);
+                CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), new Feedback(result.success(), result.message()));
+                if (result.success()) syncEconomy(p.server);
+            }); ctx.get().setPacketHandled(true);
+        }
+    }
+    public static void action(String action, Object... args) { CHANNEL.sendToServer(new ActionCommand(action, ColonyActions.args(args))); }
     public static void syncEconomy(net.minecraft.server.MinecraftServer server) {
         EconomyUpdate update = null;
-        for (ServerPlayer p : server.getPlayerList().getPlayers()) if (p.level().dimension().equals(AnnoCraft.ARCHIPELAGO)) {
+        for (ServerPlayer p : server.getPlayerList().getPlayers()) if (AnnoCraft.isColony(p.level().dimension())) {
             if (update == null) update = new EconomyUpdate(ColonyData.get(server).economySnapshot());
             EconomyUpdate message = update;
             CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), message);
@@ -119,10 +136,11 @@ public final class AnnoNetwork {
         CHANNEL.registerMessage(4, SyncRequest.class, SyncRequest::encode, SyncRequest::decode, SyncRequest::handle, Optional.of(NetworkDirection.PLAY_TO_SERVER));
         CHANNEL.registerMessage(5, CameraAnchor.class, CameraAnchor::encode, CameraAnchor::decode, CameraAnchor::handle, Optional.of(NetworkDirection.PLAY_TO_CLIENT));
         CHANNEL.registerMessage(6, RoadCommand.class, RoadCommand::encode, RoadCommand::decode, RoadCommand::handle, Optional.of(NetworkDirection.PLAY_TO_SERVER));
+        CHANNEL.registerMessage(8, ActionCommand.class, ActionCommand::encode, ActionCommand::decode, ActionCommand::handle, Optional.of(NetworkDirection.PLAY_TO_SERVER));
         CHANNEL.registerMessage(7, EconomyUpdate.class, EconomyUpdate::encode, EconomyUpdate::decode, EconomyUpdate::handle, Optional.of(NetworkDirection.PLAY_TO_CLIENT));
     }
     public static void sync(ServerPlayer p) { CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), new Snapshot(ColonyData.get(p.server).snapshot(p.server))); }
     public static void syncAll(net.minecraft.server.MinecraftServer server) {
-        for (ServerPlayer p : server.getPlayerList().getPlayers()) if (p.level().dimension().equals(AnnoCraft.ARCHIPELAGO)) sync(p);
+        for (ServerPlayer p : server.getPlayerList().getPlayers()) if (AnnoCraft.isColony(p.level().dimension())) sync(p);
     }
 }

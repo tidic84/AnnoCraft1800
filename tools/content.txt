@@ -1,0 +1,145 @@
+# AnnoCraft1800 content table. Regenerate with: java tools/GenerateContent.java (from the project root, JDK 17).
+# Generates building JSON, structure NBT and the content language files. Fields are separated by '|'.
+#   tier|id|French|English
+#   good|id|French|English
+#   building|id|French|English|style|WxHxD|options
+# Styles: house:WALL:ROOF[:plain]  farm:CROP:SOIL:HUT  ranch:HUT  mine:ORE:BASE  market:ROOF   (+ " chimney")
+# Options: coastal world=old|new|any level=N upgrade=id cost=a:1,b:2 upkeep=N storage=N work=tier:N cycle=N in=.. out=..
+#          house=tier:capacity:tax needs=good:rate,.. lux=good:rate,.. svc=a,b lsvc=a,b service=id:radius
+#          fert=x dep=x unlock=tier:residents shipyard defense=N
+
+tier|farmers|Paysans|Farmers
+tier|workers|Ouvriers|Workers
+tier|artisans|Artisans|Artisans
+tier|engineers|Ingénieurs|Engineers
+tier|investors|Investisseurs|Investors
+tier|laborers|Journaliers|Laborers
+tier|overseers|Contremaîtres|Overseers
+
+good|fish|Poisson|Fish
+good|wood|Bois|Wood
+good|timber|Planches|Timber
+good|wool|Laine|Wool
+good|work_clothes|Vêtements de travail|Work clothes
+good|potatoes|Pommes de terre|Potatoes
+good|schnapps|Eau-de-vie|Schnapps
+good|grain|Céréales|Grain
+good|flour|Farine|Flour
+good|bread|Pain|Bread
+good|pigs|Porcs|Pigs
+good|sausages|Saucisses|Sausages
+good|tallow|Suif|Tallow
+good|soap|Savon|Soap
+good|hops|Houblon|Hops
+good|beer|Bière|Beer
+good|clay|Argile|Clay
+good|bricks|Briques|Bricks
+good|iron|Fer|Iron
+good|coal|Charbon|Coal
+good|steel|Acier|Steel
+good|steel_beams|Poutres d’acier|Steel beams
+good|weapons|Armes|Weapons
+good|sails|Voiles|Sails
+good|beef|Bœuf|Beef
+good|canned_food|Conserves|Canned food
+good|sewing_machines|Machines à coudre|Sewing machines
+good|sand|Sable quartzeux|Quartz sand
+good|glass|Verre|Glass
+good|windows|Fenêtres|Windows
+good|light_bulbs|Ampoules|Light bulbs
+good|grapes|Raisin|Grapes
+good|champagne|Champagne|Champagne
+good|gold|Pépites d’or|Gold nuggets
+good|pocket_watches|Montres de poche|Pocket watches
+good|jewelry|Bijoux|Jewellery
+good|plantains|Bananes plantains|Plantains
+good|alpaca_wool|Laine d’alpaga|Alpaca wool
+good|ponchos|Ponchos|Ponchos
+good|sugar_cane|Canne à sucre|Sugar cane
+good|rum|Rhum|Rum
+good|coffee_beans|Grains de café|Coffee beans
+good|coffee|Café|Coffee
+good|tobacco|Tabac|Tobacco
+good|cigars|Cigares|Cigars
+
+# Storage and logistics (both worlds)
+building|trading_post|Comptoir côtier|Coastal trading post|house:polished_diorite:prismarine_bricks|11x8x9|coastal cost=coins:500 storage=60
+building|warehouse|Entrepôt|Warehouse|house:cut_sandstone:stone_bricks|11x8x9|cost=coins:200,timber:4 upkeep=5 storage=60
+building|market|Marché|Marketplace|market:red_terracotta|9x5x9|cost=coins:200,timber:4 upkeep=10 service=market:40
+building|shipyard|Chantier naval|Shipyard|house:stone_bricks:dark_prismarine|11x9x9|coastal shipyard cost=coins:1000,timber:10 upkeep=20
+building|harbor_defense|Batterie côtière|Harbour battery|house:deepslate_bricks:polished_blackstone_bricks:plain|5x9x5|coastal defense=60 unlock=workers:1 cost=coins:1000,timber:6,weapons:4 upkeep=25
+
+# Old World residences: farmers to investors
+building|residence|Résidence de paysans|Farmer residence|house:terracotta:deepslate_tiles|7x7x7|world=old upgrade=residence_2 cost=timber:2 house=farmers:10:1 needs=fish:0.05,work_clothes:0.025 svc=market lux=schnapps:0.025 lsvc=pub
+building|residence_2|Résidence d’ouvriers|Worker residence|house:bricks:deepslate_tiles|7x9x7|world=old level=2 upgrade=residence_3 cost=coins:100,timber:4 house=workers:20:2 needs=fish:0.025,work_clothes:0.02,sausages:0.02,bread:0.02 svc=market,school lux=beer:0.02,soap:0.015 lsvc=church
+building|residence_3|Résidence d’artisans|Artisan residence|house:polished_andesite:dark_prismarine|7x11x7|world=old level=3 upgrade=residence_4 cost=coins:500,timber:4,bricks:6 house=artisans:30:4 needs=sausages:0.015,bread:0.015,canned_food:0.015,sewing_machines:0.01 svc=market,school lux=rum:0.015,soap:0.01 lsvc=variety_theatre
+building|residence_4|Résidence d’ingénieurs|Engineer residence|house:polished_granite:polished_blackstone_bricks|7x13x7|world=old level=4 upgrade=residence_5 cost=coins:1500,bricks:8,steel_beams:4 house=engineers:40:7 needs=canned_food:0.01,sewing_machines:0.008,light_bulbs:0.01,coffee:0.012 svc=market,university lux=pocket_watches:0.006,beer:0.01 lsvc=bank
+building|residence_5|Résidence d’investisseurs|Investor residence|house:quartz_bricks:waxed_cut_copper|7x15x7|world=old level=5 cost=coins:4000,steel_beams:6,windows:6 house=investors:50:12 needs=coffee:0.01,light_bulbs:0.008,champagne:0.01,cigars:0.01 svc=market,club lux=jewelry:0.006,pocket_watches:0.004 lsvc=bank
+
+# Farmers' economy
+building|fishery|Pêcherie|Fishery|house:cyan_terracotta:dark_prismarine|7x6x7|coastal cost=coins:100,timber:2 upkeep=15 work=farmers:15 cycle=30 out=fish:1
+building|lumberjack|Cabane de bûcheron|Lumberjack’s hut|house:packed_mud:mud_bricks:plain|5x6x5|cost=coins:50 upkeep=5 work=farmers:5 cycle=15 out=wood:1
+building|sawmill|Scierie|Sawmill|house:brown_terracotta:deepslate_bricks|9x7x7|cost=coins:100,timber:2 upkeep=10 work=farmers:10 cycle=15 in=wood:1 out=timber:1
+building|sheep_farm|Bergerie|Sheep farm|ranch:mud_bricks|9x5x9|world=old cost=coins:100,timber:2 upkeep=5 work=farmers:5 cycle=30 out=wool:1
+building|knitter|Atelier de tricot|Framework knitters|house:white_terracotta:deepslate_tiles|7x7x7|world=old cost=coins:200,timber:2 upkeep=15 work=farmers:10 cycle=30 in=wool:1 out=work_clothes:1
+building|potato_farm|Ferme de pommes de terre|Potato farm|farm:potatoes[age=7]:farmland:mud_bricks|9x5x9|world=old fert=potato cost=coins:100,timber:2 upkeep=5 work=farmers:5 cycle=30 out=potatoes:1
+building|distillery|Distillerie|Schnapps distillery|house:orange_terracotta:deepslate_tiles chimney|7x7x7|world=old cost=coins:100,timber:2 upkeep=15 work=farmers:10 cycle=30 in=potatoes:1 out=schnapps:1
+building|pub|Taverne|Pub|house:bricks:dark_prismarine|7x8x7|world=old cost=coins:300,timber:4 upkeep=15 service=pub:35
+
+# Workers' economy and heavy industry
+building|pig_farm|Porcherie|Pig farm|ranch:packed_mud|9x5x9|world=old unlock=workers:1 cost=coins:400,timber:4 upkeep=20 work=farmers:10 cycle=60 out=pigs:1
+building|slaughterhouse|Abattoir|Slaughterhouse|house:red_terracotta:deepslate_tiles|7x7x7|world=old unlock=workers:1 cost=coins:500,timber:4 upkeep=25 work=workers:15 cycle=60 in=pigs:1 out=sausages:1
+building|grain_farm|Ferme céréalière|Grain farm|farm:wheat[age=7]:farmland:mud_bricks|9x5x9|world=old fert=grain unlock=workers:1 cost=coins:300,timber:4 upkeep=10 work=farmers:10 cycle=60 out=grain:1
+building|flour_mill|Moulin|Flour mill|house:smooth_sandstone:deepslate_tiles|7x10x7|world=old unlock=workers:1 cost=coins:400,timber:4 upkeep=15 work=workers:10 cycle=30 in=grain:1 out=flour:1
+building|bakery|Boulangerie|Bakery|house:yellow_terracotta:deepslate_tiles chimney|7x7x7|world=old unlock=workers:1 cost=coins:500,timber:4 upkeep=20 work=workers:15 cycle=30 in=flour:1 out=bread:1
+building|rendering_works|Fonderie de suif|Rendering works|house:light_gray_terracotta:deepslate_tiles chimney|7x7x7|world=old unlock=workers:1 cost=coins:500,timber:4 upkeep=20 work=workers:10 cycle=60 in=pigs:1 out=tallow:1
+building|soap_factory|Savonnerie|Soap factory|house:white_terracotta:prismarine_bricks chimney|7x7x7|world=old unlock=workers:1 cost=coins:600,timber:4 upkeep=25 work=workers:15 cycle=30 in=tallow:1 out=soap:1
+building|hop_farm|Houblonnière|Hop farm|farm:beetroots[age=3]:farmland:mud_bricks|9x5x9|world=old fert=hops unlock=workers:1 cost=coins:300,timber:4 upkeep=10 work=farmers:10 cycle=60 out=hops:1
+building|brewery|Brasserie|Brewery|house:bricks:deepslate_bricks chimney|9x8x7|world=old unlock=workers:1 cost=coins:800,timber:6 upkeep=30 work=workers:15 cycle=60 in=grain:1,hops:1 out=beer:1
+building|school|École|School|house:light_gray_terracotta:deepslate_tiles|7x8x7|world=old unlock=workers:1 cost=coins:600,timber:6 upkeep=20 service=school:40
+building|church|Église|Church|house:stone_bricks:deepslate_tiles|7x14x7|world=old unlock=workers:1 cost=coins:1000,timber:8 upkeep=30 service=church:45
+building|clay_pit|Glaisière|Clay pit|mine:clay:mud|7x4x7|dep=clay unlock=workers:1 cost=coins:300,timber:4 upkeep=10 work=workers:10 cycle=30 out=clay:1
+building|brickworks|Briqueterie|Brick factory|house:bricks:deepslate_bricks chimney|9x7x7|unlock=workers:1 cost=coins:500,timber:6 upkeep=20 work=workers:15 cycle=30 in=clay:1 out=bricks:1
+building|iron_mine|Mine de fer|Iron mine|mine:iron_ore:stone|7x6x7|dep=iron unlock=workers:1 cost=coins:600,timber:6 upkeep=25 work=workers:15 cycle=30 out=iron:1
+building|coal_mine|Mine de charbon|Coal mine|mine:coal_ore:stone|7x6x7|dep=coal unlock=workers:1 cost=coins:600,timber:6 upkeep=25 work=workers:15 cycle=30 out=coal:1
+building|charcoal_kiln|Charbonnière|Charcoal kiln|house:packed_mud:mud_bricks:plain chimney|5x6x5|unlock=workers:1 cost=coins:300,timber:4 upkeep=15 work=workers:10 cycle=30 in=wood:1 out=coal:1
+building|furnace|Haut fourneau|Furnace|house:deepslate_bricks:polished_blackstone_bricks chimney|7x9x7|world=old unlock=workers:1 cost=coins:1000,timber:8 upkeep=40 work=workers:20 cycle=30 in=iron:1,coal:1 out=steel:1
+building|steelworks|Aciérie|Steelworks|house:polished_blackstone_bricks:deepslate_tiles chimney|9x9x7|world=old unlock=workers:1 cost=coins:1500,timber:8,bricks:4 upkeep=50 work=workers:25 cycle=45 in=steel:1 out=steel_beams:1
+building|weapon_factory|Manufacture d’armes|Weapon factory|house:deepslate_bricks:dark_prismarine chimney|7x8x7|world=old unlock=workers:1 cost=coins:1200,timber:6,bricks:4 upkeep=40 work=workers:20 cycle=60 in=steel:1 out=weapons:1
+building|sailmakers|Voilerie|Sailmakers|house:white_terracotta:stone_bricks|7x7x7|world=old unlock=workers:1 cost=coins:500,timber:6 upkeep=20 work=workers:10 cycle=30 in=wool:1 out=sails:1
+
+# Artisans
+building|cattle_farm|Élevage bovin|Cattle farm|ranch:mud_bricks|9x5x9|world=old unlock=artisans:1 cost=coins:600,bricks:4 upkeep=20 work=farmers:10 cycle=60 out=beef:1
+building|cannery|Conserverie|Cannery|house:light_gray_terracotta:polished_blackstone_bricks chimney|9x8x7|world=old unlock=artisans:1 cost=coins:1500,bricks:8 upkeep=50 work=artisans:25 cycle=60 in=beef:1,iron:1 out=canned_food:1
+building|sewing_machine_factory|Fabrique de machines à coudre|Sewing machine factory|house:polished_andesite:deepslate_tiles chimney|9x8x7|world=old unlock=artisans:1 cost=coins:1500,bricks:8 upkeep=50 work=workers:20 cycle=60 in=steel:1,timber:1 out=sewing_machines:1
+building|variety_theatre|Théâtre de variétés|Variety theatre|house:red_terracotta:waxed_cut_copper|9x10x9|world=old unlock=artisans:1 cost=coins:2500,bricks:10 upkeep=50 service=variety_theatre:45
+building|quartz_pit|Carrière de quartz|Quartz pit|mine:smooth_quartz:sandstone|7x4x7|world=old dep=quartz unlock=artisans:1 cost=coins:600,bricks:4 upkeep=20 work=workers:10 cycle=30 out=sand:1
+building|glassworks|Verrerie|Glassworks|house:smooth_sandstone:dark_prismarine chimney|9x8x7|world=old unlock=artisans:1 cost=coins:1200,bricks:8 upkeep=40 work=workers:15 cycle=30 in=sand:1 out=glass:1
+
+# Engineers
+building|university|Université|University|house:quartz_bricks:deepslate_tiles|9x12x9|world=old unlock=engineers:1 cost=coins:4000,bricks:10,steel_beams:4 upkeep=80 service=university:50
+building|light_bulb_factory|Fabrique d’ampoules|Light bulb factory|house:white_terracotta:polished_blackstone_bricks chimney|9x8x7|world=old unlock=engineers:1 cost=coins:3000,bricks:8,steel_beams:4 upkeep=80 work=engineers:30 cycle=60 in=glass:1,coal:1 out=light_bulbs:1
+building|window_maker|Vitrerie|Window makers|house:smooth_sandstone:waxed_cut_copper|7x8x7|world=old unlock=engineers:1 cost=coins:2000,bricks:6,steel_beams:2 upkeep=50 work=artisans:20 cycle=60 in=glass:1,timber:1 out=windows:1
+building|goldsmith|Horlogerie|Clockmakers|house:quartz_bricks:waxed_cut_copper|7x8x7|world=old unlock=engineers:1 cost=coins:3000,bricks:6,steel_beams:4 upkeep=80 work=artisans:25 cycle=90 in=gold:1,glass:1 out=pocket_watches:1
+building|bank|Banque|Bank|house:quartz_bricks:polished_blackstone_bricks|9x11x9|world=old unlock=engineers:1 cost=coins:6000,steel_beams:8 upkeep=100 service=bank:50
+
+# Investors
+building|vineyard|Vignoble|Vineyard|farm:sweet_berry_bush[age=3]:grass_block:mud_bricks|9x5x9|world=old fert=grapes unlock=investors:1 cost=coins:2000,steel_beams:4 upkeep=40 work=farmers:10 cycle=60 out=grapes:1
+building|champagne_cellar|Cave à champagne|Champagne cellar|house:calcite:waxed_cut_copper|9x8x7|world=old unlock=investors:1 cost=coins:5000,steel_beams:6,windows:4 upkeep=120 work=engineers:20 cycle=90 in=grapes:1,glass:1 out=champagne:1
+building|jeweller|Joaillerie|Jewellers|house:quartz_bricks:gilded_blackstone|7x9x7|world=old unlock=investors:1 cost=coins:6000,steel_beams:6,windows:4 upkeep=150 work=engineers:25 cycle=120 in=gold:1 out=jewelry:1
+building|club|Cercle des investisseurs|Members’ club|house:calcite:polished_blackstone_bricks|9x10x9|world=old unlock=investors:1 cost=coins:8000,steel_beams:8,windows:8 upkeep=150 service=club:50
+
+# New World
+building|laborer_house|Maison de journaliers|Laborer house|house:packed_mud:mud_bricks|7x7x7|world=new upgrade=overseer_house cost=timber:2 house=laborers:10:1 needs=plantains:0.05,ponchos:0.025 svc=chapel lux=rum:0.02
+building|overseer_house|Maison de contremaîtres|Overseer house|house:orange_terracotta:mud_bricks|7x9x7|world=new level=2 cost=coins:150,timber:4 house=overseers:20:2.5 needs=plantains:0.03,ponchos:0.02,rum:0.02 svc=chapel,market lux=coffee:0.015,cigars:0.01
+building|plantain_plantation|Bananeraie|Plantain plantation|farm:jungle_leaves[persistent=true]:grass_block:packed_mud|9x5x9|world=new fert=plantain cost=coins:100,timber:2 upkeep=5 work=laborers:10 cycle=30 out=plantains:1
+building|alpaca_farm|Élevage d’alpagas|Alpaca farm|ranch:packed_mud|9x5x9|world=new cost=coins:100,timber:2 upkeep=5 work=laborers:10 cycle=30 out=alpaca_wool:1
+building|poncho_darner|Atelier de ponchos|Poncho darner|house:yellow_terracotta:mud_bricks|7x7x7|world=new cost=coins:150,timber:2 upkeep=10 work=laborers:15 cycle=30 in=alpaca_wool:1 out=ponchos:1
+building|chapel|Chapelle|Chapel|house:white_terracotta:mud_bricks|7x10x7|world=new cost=coins:300,timber:4 upkeep=10 service=chapel:40
+building|sugar_cane_plantation|Plantation de canne à sucre|Sugar cane plantation|farm:grass:grass_block:packed_mud|9x5x9|world=new fert=sugar cost=coins:200,timber:2 upkeep=10 work=laborers:10 cycle=30 out=sugar_cane:1
+building|rum_distillery|Rhumerie|Rum distillery|house:orange_terracotta:mud_bricks chimney|9x7x7|world=new cost=coins:500,timber:4 upkeep=20 work=laborers:15 cycle=60 in=sugar_cane:1,wood:1 out=rum:1
+building|coffee_plantation|Caféière|Coffee plantation|farm:azalea:grass_block:packed_mud|9x5x9|world=new fert=coffee unlock=engineers:1 cost=coins:1000,timber:6 upkeep=20 work=laborers:10 cycle=60 out=coffee_beans:1
+building|coffee_roaster|Torréfacteur|Coffee roaster|house:brown_terracotta:mud_bricks chimney|7x7x7|world=new unlock=engineers:1 cost=coins:1500,timber:6 upkeep=30 work=overseers:15 cycle=60 in=coffee_beans:1 out=coffee:1
+building|tobacco_plantation|Plantation de tabac|Tobacco plantation|farm:fern:grass_block:packed_mud|9x5x9|world=new fert=tobacco unlock=investors:1 cost=coins:2000,timber:6 upkeep=30 work=laborers:10 cycle=60 out=tobacco:1
+building|cigar_factory|Manufacture de cigares|Cigar factory|house:brown_terracotta:packed_mud chimney|9x7x7|world=new unlock=investors:1 cost=coins:3000,timber:8 upkeep=60 work=overseers:20 cycle=60 in=tobacco:1,wood:1 out=cigars:1
+building|gold_mine|Mine d’or|Gold mine|mine:gold_ore:stone|7x6x7|world=new dep=gold unlock=engineers:1 cost=coins:2000,timber:6 upkeep=40 work=overseers:20 cycle=60 out=gold:1

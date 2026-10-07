@@ -1,0 +1,13 @@
+{
+  "name": "building.annocraft1800.variety_theatre",
+  "structure": "annocraft1800:variety_theatre",
+  "width": 9, "height": 10, "depth": 9,
+  "coastal": false, "level": 1,
+  "economy": {
+    "cost": {"coins": 2500, "bricks": 10},
+    "upkeep": 50,
+    "service": {"id": "variety_theatre", "radius": 45},
+    "world": "old",
+    "unlock": {"tier": "artisans", "residents": 1}
+  }
+}

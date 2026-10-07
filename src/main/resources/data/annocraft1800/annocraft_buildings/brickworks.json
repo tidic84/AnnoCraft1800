@@ -1,0 +1,14 @@
+{
+  "name": "building.annocraft1800.brickworks",
+  "structure": "annocraft1800:brickworks",
+  "width": 9, "height": 7, "depth": 7,
+  "coastal": false, "level": 1,
+  "economy": {
+    "cost": {"coins": 500, "timber": 6},
+    "upkeep": 20,
+    "workforce": {"tier": "workers", "amount": 15},
+    "production": {"cycle": 30, "inputs": {"clay": 1}, "outputs": {"bricks": 1}},
+    "world": "any",
+    "unlock": {"tier": "workers", "residents": 1}
+  }
+}

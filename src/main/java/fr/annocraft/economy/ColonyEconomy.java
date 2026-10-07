@@ -4,67 +4,95 @@ import net.minecraft.nbt.*;
 import java.util.*;
 
 /**
- * Server-side colony economy: island stocks, road logistics, workforce, production, needs and finances.
+ * Server-side colony economy: island stocks, road logistics, services, workforce, production, needs and finances.
  * Pure data simulation, independent of loaded chunks, so islands keep running while nobody watches them.
  */
 public final class ColonyEconomy {
     public static final double START_COINS = 5000;
     public static final Map<String, Integer> START_CARGO = Map.of("timber", 30, "fish", 10);
-    /** Seconds to fill one resident slot when needs are met. */
+    public static final List<String> TIERS = List.of("farmers", "workers", "artisans", "engineers", "investors", "laborers", "overseers");
+    /** Residents gained or lost per second while moving toward the target population. */
     public static final double GROWTH_PER_SECOND = .2;
     public enum Status { OK, NO_ROAD, NO_WORKFORCE, NO_INPUT, STORAGE_FULL, NEEDS_UNMET }
-    public record Site(UUID id, String island, int x, int z, int width, int depth, EconomyProfile profile) { }
+    public record Site(UUID id, String island, int x, int z, int width, int depth, EconomyProfile profile) {
+        double centerX() { return x + width / 2.0; }
+        double centerZ() { return z + depth / 2.0; }
+    }
     public static final class SiteState {
-        public double residents, progress, productivity, supply = 1;
+        public double residents, progress, productivity, supply = 1, luxury;
         public boolean connected;
         public Status status = Status.OK;
     }
     private double coins = START_COINS;
-    private boolean sandbox, cargoDelivered;
+    private boolean sandbox;
+    private final Set<String> cargoWorlds = new TreeSet<>();
+    private String homeIsland;
     private final Map<String, Map<String, Double>> stock = new TreeMap<>();
     private final Map<UUID, SiteState> states = new HashMap<>();
     // Derived each step; never saved.
     private final Map<String, Map<String, Double>> rates = new TreeMap<>();
     private final Map<String, Map<String, int[]>> workforce = new TreeMap<>();
     private final Map<String, Integer> capacity = new TreeMap<>();
-    private double incomePerMinute, upkeepPerMinute;
+    private final Map<String, Integer> population = new TreeMap<>();
+    private double incomePerMinute, upkeepPerMinute, extraUpkeepPerMinute;
     private long topology = Long.MIN_VALUE;
     private Set<UUID> connected = Set.of();
+    private Map<UUID, Set<String>> coverage = Map.of();
 
     public double coins() { return coins; }
+    public void addCoins(double amount) { coins += amount; }
     public boolean sandbox() { return sandbox; }
     public void setSandbox(boolean value) { sandbox = value; }
     public double incomePerMinute() { return incomePerMinute; }
     public double upkeepPerMinute() { return upkeepPerMinute; }
+    /** Ship and other non-building upkeep, charged by {@link #step} and shown in the balance. */
+    public void setExtraUpkeep(double perMinute) { extraUpkeepPerMinute = perMinute; }
+    public String homeIsland() { return homeIsland; }
     public double stock(String island, String good) { return stock.getOrDefault(island, Map.of()).getOrDefault(good, 0.0); }
+    public Map<String, Double> stocks(String island) { return Collections.unmodifiableMap(stock.getOrDefault(island, Map.of())); }
+    public Set<String> stockedIslands() { return Collections.unmodifiableSet(stock.keySet()); }
     public int capacity(String island) { return capacity.getOrDefault(island, 0); }
     public SiteState state(UUID id) { return states.get(id); }
     public int[] workforce(String island, String tier) { return workforce.getOrDefault(island, Map.of()).getOrDefault(tier, new int[2]); }
     public double rate(String island, String good) { return rates.getOrDefault(island, Map.of()).getOrDefault(good, 0.0); }
+    public int population(String tier) { return population.getOrDefault(tier, 0); }
+    public int totalPopulation() { return population.values().stream().mapToInt(Integer::intValue).sum(); }
     public void addStock(String island, String good, double amount) {
         stock.computeIfAbsent(island, k -> new TreeMap<>()).merge(good, amount, Double::sum);
     }
+    /** Adds goods without exceeding the island's storage; returns the amount actually stored. */
+    public double store(String island, String good, double amount) {
+        double room = Math.max(0, capacity(island) - stock(island, good)), stored = Math.min(room, amount);
+        if (stored > 0) addStock(island, good, stored);
+        return stored;
+    }
+    public static String worldOf(String island) { return island != null && island.startsWith("nw_") ? "new" : "old"; }
 
     /** @return null when affordable, otherwise the message suffix explaining why not. */
-    public String checkCost(String island, EconomyProfile profile) {
+    public String checkCost(String island, Map<String, Integer> cost) {
         if (sandbox) return null;
-        if (coins < profile.coinCost()) return "no_coins";
-        for (var e : profile.cost().entrySet())
+        if (coins < cost.getOrDefault(EconomyProfile.COINS, 0)) return "no_coins";
+        for (var e : cost.entrySet())
             if (!e.getKey().equals(EconomyProfile.COINS) && stock(island, e.getKey()) + 1e-9 < e.getValue()) return "no_goods";
         return null;
     }
-    public void pay(String island, EconomyProfile profile) {
+    public String checkCost(String island, EconomyProfile profile) { return checkCost(island, profile.cost()); }
+    public void pay(String island, Map<String, Integer> cost) {
         if (sandbox) return;
-        coins -= profile.coinCost();
-        for (var e : profile.cost().entrySet()) if (!e.getKey().equals(EconomyProfile.COINS)) addStock(island, e.getKey(), -e.getValue());
+        coins -= cost.getOrDefault(EconomyProfile.COINS, 0);
+        for (var e : cost.entrySet()) if (!e.getKey().equals(EconomyProfile.COINS)) addStock(island, e.getKey(), -e.getValue());
+    }
+    public void pay(String island, EconomyProfile profile) { pay(island, profile.cost()); }
+    public boolean unlocked(EconomyProfile p) {
+        return sandbox || p.unlockTier() == null || population(p.unlockTier()) >= p.unlockResidents();
     }
     public void placed(Site site) {
         SiteState s = states.computeIfAbsent(site.id(), id -> new SiteState());
         if (site.profile().housing() && s.residents < 1) s.residents = 1;
-        // The first storage building receives the founding ship's cargo, so the first island can start building.
-        if (site.profile().storageNode() && !cargoDelivered) {
+        // The first storage building of each world receives a founding ship's cargo, so the island can start building.
+        if (site.profile().storageNode() && cargoWorlds.add(worldOf(site.island()))) {
             START_CARGO.forEach((good, amount) -> addStock(site.island(), good, amount));
-            cargoDelivered = true;
+            if (homeIsland == null) homeIsland = site.island();
         }
         topology = Long.MIN_VALUE;
     }
@@ -77,8 +105,12 @@ public final class ColonyEconomy {
 
     /** Advances the colony by {@code dt} seconds. {@code topologyRevision} changes whenever buildings or roads change. */
     public void step(Collection<Site> sites, Set<Long> roads, long topologyRevision, double dt) {
-        if (topologyRevision != topology) { connected = connectivity(sites, roads); topology = topologyRevision; }
-        capacity.clear(); workforce.clear();
+        if (topologyRevision != topology) {
+            connected = connectivity(sites, roads);
+            coverage = coverage(sites, connected);
+            topology = topologyRevision;
+        }
+        capacity.clear(); workforce.clear(); population.clear();
         Map<String, Map<String, Double>> flow = new TreeMap<>();
         for (Site site : sites) {
             states.computeIfAbsent(site.id(), id -> new SiteState()).connected = connected.contains(site.id());
@@ -86,10 +118,11 @@ public final class ColonyEconomy {
         }
         for (Site site : sites) {
             SiteState s = states.get(site.id()); EconomyProfile p = site.profile();
+            if (p.housing()) population.merge(p.houseTier(), (int) Math.floor(s.residents + 1e-9), Integer::sum);
             if (p.housing() && s.connected) tier(site.island(), p.houseTier())[0] += (int) Math.floor(s.residents + 1e-9);
             if (p.producer() && p.workforce() > 0 && s.connected) tier(site.island(), p.workTier())[1] += p.workforce();
         }
-        double income = 0, upkeep = 0;
+        double income = 0, upkeep = extraUpkeepPerMinute / 60 * dt;
         for (Site site : sites) {
             SiteState s = states.get(site.id()); EconomyProfile p = site.profile();
             upkeep += p.upkeep() / 60.0 * dt;
@@ -105,6 +138,10 @@ public final class ColonyEconomy {
             Set<String> goods = new TreeSet<>(r.keySet()); goods.addAll(f.keySet());
             for (String good : goods) r.merge(good, (f.getOrDefault(good, 0.0) * 60 / dt - r.getOrDefault(good, 0.0)) * smoothing, Double::sum);
         }
+    }
+    /** Records goods moved by ships or trade in the island's flow statistics. */
+    public void recordFlow(String island, String good, double amountPerMinute) {
+        rates.computeIfAbsent(island, k -> new TreeMap<>()).merge(good, amountPerMinute / 30, Double::sum);
     }
     private int[] tier(String island, String tier) { return workforce.computeIfAbsent(island, k -> new TreeMap<>()).computeIfAbsent(tier, k -> new int[2]); }
     private void produce(Site site, SiteState s, double dt, Map<String, Map<String, Double>> flow) {
@@ -125,27 +162,37 @@ public final class ColonyEconomy {
         p.outputs().forEach((good, amount) -> { addStock(site.island(), good, amount); f.merge(good, (double) amount, Double::sum); });
         s.progress = 0;
     }
+    private double consume(Site site, SiteState s, Map<String, Double> needs, double dt, Map<String, Double> flow, double[] fulfilled) {
+        for (var need : needs.entrySet()) {
+            double demand = s.residents * need.getValue() / 60 * dt, take = Math.max(0, Math.min(stock(site.island(), need.getKey()), demand));
+            addStock(site.island(), need.getKey(), -take); flow.merge(need.getKey(), -take, Double::sum);
+            fulfilled[0] += demand <= 0 ? 1 : take / demand; fulfilled[1]++;
+        }
+        return fulfilled[0];
+    }
     private double house(Site site, SiteState s, double dt, Map<String, Map<String, Double>> flow) {
         EconomyProfile p = site.profile();
         double target;
-        if (!s.connected) { s.supply = 0; s.status = Status.NO_ROAD; target = Math.min(1, p.capacity()); }
+        if (!s.connected) { s.supply = 0; s.luxury = 0; s.status = Status.NO_ROAD; target = Math.min(1, p.capacity()); }
         else {
-            double fulfilled = 0;
             Map<String, Double> f = flow.computeIfAbsent(site.island(), k -> new TreeMap<>());
-            for (var need : p.needs().entrySet()) {
-                double demand = s.residents * need.getValue() / 60 * dt, take = Math.max(0, Math.min(stock(site.island(), need.getKey()), demand));
-                addStock(site.island(), need.getKey(), -take); f.merge(need.getKey(), -take, Double::sum);
-                fulfilled += demand <= 0 ? 1 : take / demand;
-            }
-            fulfilled = p.needs().isEmpty() ? 1 : fulfilled / p.needs().size();
+            Set<String> covered = coverage.getOrDefault(site.id(), Set.of());
+            double[] basic = new double[2], lux = new double[2];
+            consume(site, s, p.needs(), dt, f, basic);
+            for (String service : p.services()) { basic[0] += covered.contains(service) ? 1 : 0; basic[1]++; }
+            consume(site, s, p.luxury(), dt, f, lux);
+            for (String service : p.luxuryServices()) { lux[0] += covered.contains(service) ? 1 : 0; lux[1]++; }
+            double fulfilled = basic[1] == 0 ? 1 : basic[0] / basic[1], luxury = lux[1] == 0 ? 0 : lux[0] / lux[1];
             // Smoothed so a single empty tick does not empty a house.
             s.supply += (fulfilled - s.supply) * Math.min(1, dt / 20);
+            s.luxury += (luxury - s.luxury) * Math.min(1, dt / 20);
             target = p.capacity() * Math.min(1, .5 + .5 * s.supply / .95);
             s.status = s.supply < .9 ? Status.NEEDS_UNMET : Status.OK;
         }
         double step = GROWTH_PER_SECOND * dt;
         s.residents = s.residents < target ? Math.min(target, s.residents + step) : Math.max(target, s.residents - step);
-        return s.connected ? s.residents * p.tax() / 60 * dt * (.5 + .5 * s.supply) : 0;
+        // Basic needs keep residents paying; luxury goods and services raise taxes by up to 50 %.
+        return s.connected ? s.residents * p.tax() / 60 * dt * (.5 + .5 * s.supply) * (1 + .5 * s.luxury) : 0;
     }
 
     /** Buildings touching a road network that also touches a storage building of the same island. */
@@ -178,6 +225,20 @@ public final class ColonyEconomy {
         for (Site s : sites) for (int c : touching.get(s.id())) if (served.contains(s.island() + "#" + c)) { result.add(s.id()); break; }
         return result;
     }
+    /** Services reaching each residence: connected service buildings of the same island within their radius. */
+    public static Map<UUID, Set<String>> coverage(Collection<Site> sites, Set<UUID> connected) {
+        List<Site> providers = sites.stream().filter(s -> s.profile().serviceProvider() && connected.contains(s.id())).toList();
+        Map<UUID, Set<String>> result = new HashMap<>();
+        for (Site house : sites) {
+            if (!house.profile().housing()) continue;
+            Set<String> covered = new HashSet<>();
+            for (Site p : providers)
+                if (p.island().equals(house.island()) && Math.hypot(p.centerX() - house.centerX(), p.centerZ() - house.centerZ()) <= p.profile().radius())
+                    covered.add(p.profile().service());
+            result.put(house.id(), covered);
+        }
+        return result;
+    }
     private static void add(Set<Integer> comps, Map<Long, Integer> component, int x, int z) {
         Integer c = component.get(pack(x, z)); if (c != null) comps.add(c);
     }
@@ -187,14 +248,17 @@ public final class ColonyEconomy {
 
     public CompoundTag save() {
         CompoundTag t = new CompoundTag();
-        t.putDouble("coins", coins); t.putBoolean("sandbox", sandbox); t.putBoolean("cargo", cargoDelivered);
+        t.putDouble("coins", coins); t.putBoolean("sandbox", sandbox);
+        ListTag cargo = new ListTag(); cargoWorlds.forEach(w -> cargo.add(StringTag.valueOf(w))); t.put("cargo_worlds", cargo);
+        if (homeIsland != null) t.putString("home", homeIsland);
         CompoundTag islands = new CompoundTag();
         stock.forEach((island, goods) -> { CompoundTag g = new CompoundTag(); goods.forEach(g::putDouble); islands.put(island, g); });
         t.put("stock", islands);
         ListTag sites = new ListTag();
         states.entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(e -> {
             CompoundTag s = new CompoundTag(); s.putUUID("id", e.getKey());
-            s.putDouble("residents", e.getValue().residents); s.putDouble("progress", e.getValue().progress); s.putDouble("supply", e.getValue().supply);
+            s.putDouble("residents", e.getValue().residents); s.putDouble("progress", e.getValue().progress);
+            s.putDouble("supply", e.getValue().supply); s.putDouble("luxury", e.getValue().luxury);
             sites.add(s);
         });
         t.put("sites", sites);
@@ -203,15 +267,20 @@ public final class ColonyEconomy {
     public static ColonyEconomy load(CompoundTag t) {
         ColonyEconomy e = new ColonyEconomy();
         if (t.contains("coins")) e.coins = t.getDouble("coins");
-        e.sandbox = t.getBoolean("sandbox"); e.cargoDelivered = t.getBoolean("cargo");
+        e.sandbox = t.getBoolean("sandbox");
+        if (t.getBoolean("cargo")) e.cargoWorlds.add("old");
+        for (Tag w : t.getList("cargo_worlds", Tag.TAG_STRING)) e.cargoWorlds.add(w.getAsString());
+        if (t.contains("home")) e.homeIsland = t.getString("home");
         CompoundTag islands = t.getCompound("stock");
         for (String island : islands.getAllKeys()) {
             CompoundTag g = islands.getCompound(island);
             for (String good : g.getAllKeys()) e.addStock(island, good, g.getDouble(good));
         }
+        if (e.homeIsland == null && !e.stock.isEmpty()) e.homeIsland = e.stock.keySet().iterator().next();
         for (Tag entry : t.getList("sites", Tag.TAG_COMPOUND)) {
             CompoundTag s = (CompoundTag) entry; SiteState state = new SiteState();
-            state.residents = s.getDouble("residents"); state.progress = s.getDouble("progress"); state.supply = s.getDouble("supply");
+            state.residents = s.getDouble("residents"); state.progress = s.getDouble("progress");
+            state.supply = s.getDouble("supply"); state.luxury = s.getDouble("luxury");
             e.states.put(s.getUUID("id"), state);
         }
         return e;
@@ -221,12 +290,13 @@ public final class ColonyEconomy {
         CompoundTag t = new CompoundTag();
         t.putDouble("coins", coins); t.putBoolean("sandbox", sandbox);
         t.putDouble("income", incomePerMinute); t.putDouble("upkeep", upkeepPerMinute);
+        CompoundTag pop = new CompoundTag(); population.forEach(pop::putInt); t.put("population", pop);
         CompoundTag islands = new CompoundTag();
         Set<String> ids = new TreeSet<>(stock.keySet()); ids.addAll(capacity.keySet()); ids.addAll(workforce.keySet());
         for (String island : ids) {
             CompoundTag i = new CompoundTag(); i.putInt("capacity", capacity(island));
-            CompoundTag goods = new CompoundTag(); stock.getOrDefault(island, Map.of()).forEach(goods::putDouble); i.put("stock", goods);
-            CompoundTag r = new CompoundTag(); rates.getOrDefault(island, Map.of()).forEach(r::putDouble); i.put("rates", r);
+            CompoundTag goods = new CompoundTag(); stock.getOrDefault(island, Map.of()).forEach((g, v) -> { if (Math.abs(v) > 1e-6) goods.putDouble(g, v); }); i.put("stock", goods);
+            CompoundTag r = new CompoundTag(); rates.getOrDefault(island, Map.of()).forEach((g, v) -> { if (Math.abs(v) > .01) r.putDouble(g, v); }); i.put("rates", r);
             CompoundTag w = new CompoundTag(); workforce.getOrDefault(island, Map.of()).forEach((tier, v) -> w.putIntArray(tier, v.clone())); i.put("workforce", w);
             islands.put(island, i);
         }
@@ -237,6 +307,9 @@ public final class ColonyEconomy {
             CompoundTag b = new CompoundTag(); b.putUUID("id", site.id()); b.putBoolean("connected", s.connected);
             b.putByte("status", (byte) s.status.ordinal()); b.putDouble("residents", s.residents);
             b.putDouble("productivity", s.productivity); b.putDouble("supply", s.supply); b.putDouble("progress", s.progress);
+            b.putDouble("luxury", s.luxury);
+            ListTag covered = new ListTag(); coverage.getOrDefault(site.id(), Set.of()).stream().sorted().forEach(c -> covered.add(StringTag.valueOf(c)));
+            b.put("services", covered);
             list.add(b);
         }
         t.put("sites", list);

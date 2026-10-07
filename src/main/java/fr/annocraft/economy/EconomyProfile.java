@@ -10,13 +10,19 @@ import java.util.*;
 public record EconomyProfile(Map<String, Integer> cost, int upkeep, int storage,
                              String workTier, int workforce, int cycle,
                              Map<String, Integer> inputs, Map<String, Integer> outputs,
-                             String houseTier, int capacity, double tax, Map<String, Double> needs) {
-    public static final String COINS = "coins";
-    public static final EconomyProfile NONE = new EconomyProfile(Map.of(), 0, 0, "farmers", 0, 0, Map.of(), Map.of(), null, 0, 0, Map.of());
+                             String houseTier, int capacity, double tax, Map<String, Double> needs,
+                             Map<String, Double> luxury, List<String> services, List<String> luxuryServices,
+                             String service, int radius, String fertility, String deposit, String world,
+                             String unlockTier, int unlockResidents, boolean shipyard, int defense) {
+    public static final String COINS = "coins", ANY_WORLD = "any";
+    public static final EconomyProfile NONE = new EconomyProfile(Map.of(), 0, 0, "farmers", 0, 0, Map.of(), Map.of(), null, 0, 0, Map.of(),
+            Map.of(), List.of(), List.of(), null, 0, null, null, ANY_WORLD, null, 0, false, 0);
     public boolean producer() { return cycle > 0 && !outputs.isEmpty(); }
     public boolean housing() { return capacity > 0 && houseTier != null; }
     public boolean storageNode() { return storage > 0; }
+    public boolean serviceProvider() { return service != null && radius > 0; }
     public int coinCost() { return cost.getOrDefault(COINS, 0); }
+    public boolean buildableIn(String worldName) { return ANY_WORLD.equals(world) || world.equals(worldName); }
 
     public static EconomyProfile parse(JsonObject json) {
         if (json == null) return NONE;
@@ -34,18 +40,39 @@ public record EconomyProfile(Map<String, Integer> cost, int upkeep, int storage,
             cycle = p.get("cycle").getAsInt(); inputs = ints(p, "inputs"); outputs = ints(p, "outputs");
             if (cycle < 1 || outputs.isEmpty()) throw new IllegalArgumentException("Production needs a positive cycle and outputs");
         }
-        String houseTier = null; int capacity = 0; double tax = 0; Map<String, Double> needs = Map.of();
+        String houseTier = null; int capacity = 0; double tax = 0;
+        Map<String, Double> needs = Map.of(), luxury = Map.of(); List<String> services = List.of(), luxuryServices = List.of();
         if (json.has("housing")) {
             JsonObject h = json.getAsJsonObject("housing");
             houseTier = h.get("tier").getAsString(); capacity = h.get("capacity").getAsInt();
             tax = h.has("tax") ? h.get("tax").getAsDouble() : 0;
-            Map<String, Double> n = new TreeMap<>();
-            if (h.has("needs")) h.getAsJsonObject("needs").entrySet().forEach(e -> n.put(e.getKey(), e.getValue().getAsDouble()));
-            needs = Collections.unmodifiableMap(n);
+            needs = doubles(h, "needs"); luxury = doubles(h, "luxury");
+            services = strings(h, "services"); luxuryServices = strings(h, "luxury_services");
             if (capacity < 1) throw new IllegalArgumentException("Housing needs a positive capacity");
         }
-        if (upkeep < 0 || storage < 0 || workforce < 0 || tax < 0) throw new IllegalArgumentException("Negative economy value");
-        return new EconomyProfile(cost, upkeep, storage, workTier, workforce, cycle, inputs, outputs, houseTier, capacity, tax, needs);
+        String service = null; int radius = 0;
+        if (json.has("service")) {
+            JsonObject s = json.getAsJsonObject("service");
+            service = s.get("id").getAsString(); radius = s.get("radius").getAsInt();
+            if (radius < 1) throw new IllegalArgumentException("Service needs a positive radius");
+        }
+        String fertility = null, deposit = null;
+        if (json.has("requires")) {
+            JsonObject r = json.getAsJsonObject("requires");
+            if (r.has("fertility")) fertility = r.get("fertility").getAsString();
+            if (r.has("deposit")) deposit = r.get("deposit").getAsString();
+        }
+        String world = json.has("world") ? json.get("world").getAsString() : ANY_WORLD;
+        String unlockTier = null; int unlockResidents = 0;
+        if (json.has("unlock")) {
+            JsonObject u = json.getAsJsonObject("unlock");
+            unlockTier = u.get("tier").getAsString(); unlockResidents = u.get("residents").getAsInt();
+        }
+        boolean shipyard = json.has("shipyard") && json.get("shipyard").getAsBoolean();
+        int defense = json.has("defense") ? json.get("defense").getAsInt() : 0;
+        if (upkeep < 0 || storage < 0 || workforce < 0 || tax < 0 || defense < 0 || unlockResidents < 0) throw new IllegalArgumentException("Negative economy value");
+        return new EconomyProfile(cost, upkeep, storage, workTier, workforce, cycle, inputs, outputs, houseTier, capacity, tax, needs,
+                luxury, services, luxuryServices, service, radius, fertility, deposit, world, unlockTier, unlockResidents, shipyard, defense);
     }
     private static Map<String, Integer> ints(JsonObject json, String key) {
         if (!json.has(key)) return Map.of();
@@ -56,6 +83,18 @@ public record EconomyProfile(Map<String, Integer> cost, int upkeep, int storage,
             result.put(e.getKey(), v);
         }
         return Collections.unmodifiableMap(result);
+    }
+    private static Map<String, Double> doubles(JsonObject json, String key) {
+        if (!json.has(key)) return Map.of();
+        Map<String, Double> result = new TreeMap<>();
+        json.getAsJsonObject(key).entrySet().forEach(e -> result.put(e.getKey(), e.getValue().getAsDouble()));
+        return Collections.unmodifiableMap(result);
+    }
+    private static List<String> strings(JsonObject json, String key) {
+        if (!json.has(key)) return List.of();
+        List<String> result = new ArrayList<>();
+        json.getAsJsonArray(key).forEach(e -> result.add(e.getAsString()));
+        return List.copyOf(result);
     }
     public JsonObject toJson() {
         JsonObject j = new JsonObject();
@@ -70,8 +109,23 @@ public record EconomyProfile(Map<String, Integer> cost, int upkeep, int storage,
         }
         if (housing()) {
             JsonObject h = new JsonObject(); h.addProperty("tier", houseTier); h.addProperty("capacity", capacity); h.addProperty("tax", tax);
-            JsonObject n = new JsonObject(); needs.forEach(n::addProperty); h.add("needs", n); j.add("housing", h);
+            JsonObject n = new JsonObject(); needs.forEach(n::addProperty); h.add("needs", n);
+            JsonObject l = new JsonObject(); luxury.forEach(l::addProperty); h.add("luxury", l);
+            JsonArray s = new JsonArray(); services.forEach(s::add); h.add("services", s);
+            JsonArray ls = new JsonArray(); luxuryServices.forEach(ls::add); h.add("luxury_services", ls);
+            j.add("housing", h);
         }
+        if (serviceProvider()) { JsonObject s = new JsonObject(); s.addProperty("id", service); s.addProperty("radius", radius); j.add("service", s); }
+        if (fertility != null || deposit != null) {
+            JsonObject r = new JsonObject();
+            if (fertility != null) r.addProperty("fertility", fertility);
+            if (deposit != null) r.addProperty("deposit", deposit);
+            j.add("requires", r);
+        }
+        j.addProperty("world", world);
+        if (unlockTier != null) { JsonObject u = new JsonObject(); u.addProperty("tier", unlockTier); u.addProperty("residents", unlockResidents); j.add("unlock", u); }
+        if (shipyard) j.addProperty("shipyard", true);
+        if (defense > 0) j.addProperty("defense", defense);
         return j;
     }
 }

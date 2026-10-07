@@ -21,7 +21,7 @@ public final class CameraSessions {
     }
     public static void update(ServerPlayer p, boolean active, double x, double z) {
         if (!active) { close(p); return; }
-        if (!p.level().dimension().equals(AnnoCraft.ARCHIPELAGO) || !Double.isFinite(x) || !Double.isFinite(z)) return;
+        if (!AnnoCraft.isColony(p.level().dimension()) || !Double.isFinite(x) || !Double.isFinite(z)) return;
         Session s = sessions.computeIfAbsent(p.getUUID(), id -> new Session(p));
         long now = p.serverLevel().getGameTime();
         if (now - s.lastUpdate < 5) return;

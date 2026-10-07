@@ -1,0 +1,31 @@
+{
+  "missions": [
+    {"id": "arrival", "chapter": 1, "speaker": "agnes",
+     "objectives": [{"type": "buildings", "target": "trading_post", "amount": 1}, {"type": "buildings", "target": "residence", "amount": 4}, {"type": "buildings", "target": "fishery", "amount": 1}],
+     "reward": {"coins": 1500, "goods": {"timber": 20}}},
+    {"id": "first_town", "chapter": 1, "speaker": "agnes",
+     "objectives": [{"type": "residents", "target": "farmers", "amount": 60}, {"type": "buildings", "target": "market", "amount": 1}, {"type": "stock", "target": "work_clothes", "amount": 10}],
+     "reward": {"coins": 2500}},
+    {"id": "industry", "chapter": 2, "speaker": "linnell",
+     "objectives": [{"type": "residents", "target": "workers", "amount": 60}, {"type": "buildings", "target": "brickworks", "amount": 1}, {"type": "stock", "target": "bricks", "amount": 20}],
+     "reward": {"coins": 4000, "goods": {"bricks": 10}}},
+    {"id": "fleet", "chapter": 2, "speaker": "agnes",
+     "objectives": [{"type": "islands", "amount": 2}, {"type": "ships", "amount": 2}, {"type": "routes", "amount": 1}],
+     "reward": {"coins": 3000, "goods": {"sails": 10}}},
+    {"id": "pirates", "chapter": 3, "speaker": "rook",
+     "objectives": [{"type": "pirates", "amount": 1}, {"type": "buildings", "target": "harbor_defense", "amount": 1}],
+     "reward": {"coins": 3000, "goods": {"weapons": 10}}, "new_world": true},
+    {"id": "new_world", "chapter": 3, "speaker": "agnes",
+     "objectives": [{"type": "world_islands", "target": "new", "amount": 1}, {"type": "stock", "target": "rum", "amount": 20}],
+     "reward": {"coins": 6000}},
+    {"id": "ashby", "chapter": 4, "speaker": "ashby",
+     "objectives": [{"type": "stance", "target": "ashby", "amount": 3}, {"type": "residents", "target": "artisans", "amount": 60}],
+     "reward": {"coins": 8000, "goods": {"steel_beams": 10}}},
+    {"id": "war", "chapter": 4, "speaker": "julien",
+     "objectives": [{"type": "eliminated", "target": "dravek", "amount": 1}],
+     "reward": {"coins": 15000}},
+    {"id": "trial", "chapter": 5, "speaker": "julien",
+     "objectives": [{"type": "residents", "target": "engineers", "amount": 80}, {"type": "residents", "target": "investors", "amount": 50}, {"type": "balance", "amount": 500}],
+     "reward": {"coins": 25000}}
+  ]
+}

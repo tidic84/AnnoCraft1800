@@ -1,0 +1,15 @@
+{
+  "name": "building.annocraft1800.iron_mine",
+  "structure": "annocraft1800:iron_mine",
+  "width": 7, "height": 6, "depth": 7,
+  "coastal": false, "level": 1,
+  "economy": {
+    "cost": {"coins": 600, "timber": 6},
+    "upkeep": 25,
+    "workforce": {"tier": "workers", "amount": 15},
+    "production": {"cycle": 30, "inputs": {}, "outputs": {"iron": 1}},
+    "requires": {"deposit": "iron"},
+    "world": "any",
+    "unlock": {"tier": "workers", "residents": 1}
+  }
+}

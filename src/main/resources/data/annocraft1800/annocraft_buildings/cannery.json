@@ -1,0 +1,14 @@
+{
+  "name": "building.annocraft1800.cannery",
+  "structure": "annocraft1800:cannery",
+  "width": 9, "height": 8, "depth": 7,
+  "coastal": false, "level": 1,
+  "economy": {
+    "cost": {"coins": 1500, "bricks": 8},
+    "upkeep": 50,
+    "workforce": {"tier": "artisans", "amount": 25},
+    "production": {"cycle": 60, "inputs": {"beef": 1, "iron": 1}, "outputs": {"canned_food": 1}},
+    "world": "old",
+    "unlock": {"tier": "artisans", "residents": 1}
+  }
+}

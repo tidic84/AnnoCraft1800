@@ -42,11 +42,12 @@ public final class RtsController {
     public static BlockPos hover;
     public static boolean hoverValid;
     public static final KeyMapping TOGGLE = new KeyMapping("key.annocraft1800.rts", GLFW.GLFW_KEY_F6, "key.categories.annocraft1800");
+    public static final KeyMapping COLONY = new KeyMapping("key.annocraft1800.colony", GLFW.GLFW_KEY_J, "key.categories.annocraft1800");
     @Mod.EventBusSubscriber(modid = AnnoCraft.ID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
     public static final class Keys {
-        @SubscribeEvent public static void register(RegisterKeyMappingsEvent event) { event.register(TOGGLE); }
+        @SubscribeEvent public static void register(RegisterKeyMappingsEvent event) { event.register(TOGGLE); event.register(COLONY); }
     }
-    public static boolean inRegion() { return Minecraft.getInstance().level != null && Minecraft.getInstance().level.dimension().equals(AnnoCraft.ARCHIPELAGO); }
+    public static boolean inRegion() { return Minecraft.getInstance().level != null && AnnoCraft.isColony(Minecraft.getInstance().level.dimension()); }
     public static void enter() {
         Minecraft mc = Minecraft.getInstance(); if (mc.player == null || !inRegion() || ClientState.DEFINITIONS.isEmpty()) return;
         active = true; x = mc.player.getX(); z = mc.player.getZ(); yaw = 135; zoom = CameraMath.DEFAULT_ZOOM;
@@ -87,7 +88,9 @@ public final class RtsController {
             if (active) exit();
             ClientState.clear(); return;
         }
+        ClientState.updateWorld();
         while (TOGGLE.consumeClick()) { if (active) { exit(); mc.setScreen(null); } else enter(); }
+        while (COLONY.consumeClick()) if (mc.screen == null && !ClientState.DEFINITIONS.isEmpty()) mc.setScreen(new ColonyScreen(null));
         if (ClientState.DEFINITIONS.isEmpty() && mc.player.tickCount % 20 == 0) AnnoNetwork.CHANNEL.sendToServer(new AnnoNetwork.SyncRequest());
         if (!active) return;
         if (!mc.player.isAlive()) { exit(); mc.setScreen(null); return; }
@@ -143,7 +146,10 @@ public final class RtsController {
         if (Math.abs(p.getX()) >= half || Math.abs(p.getZ()) >= half || p.getX() + w >= half || p.getZ() + d >= half) return false;
         if (ClientState.layout == null) return false;
         var island = ClientState.layout.islandAt(p.getX(), p.getZ()).orElse(null); if (island == null) return false;
-        for (BuildingInstance b : ClientState.BUILDINGS.values()) if (b.overlaps(p, w, d)) return false;
+        var e = def.economy(); String owner = ClientState.owner(island.id());
+        if (!e.buildableIn(ClientState.world) || (!owner.isEmpty() && !owner.equals(fr.annocraft.economy.Diplomacy.PLAYER))) return false;
+        if ((e.fertility() != null && !island.hasFertility(e.fertility())) || (e.deposit() != null && !island.hasDeposit(e.deposit()))) return false;
+        for (BuildingInstance b : ClientState.visible()) if (b.overlaps(p, w, d)) return false;
         for (int cx = 0; cx < w; cx++) for (int cz = 0; cz < d; cz++) {
             BlockPos ground = p.offset(cx, -1, cz);
             if ((!def.coastal() && !island.buildable(ground.getX(), ground.getZ())) || ClientState.layout.height(ground.getX(), ground.getZ()) <= 64) return false;
@@ -167,7 +173,7 @@ public final class RtsController {
         }
         if (placement != null) {
             AnnoNetwork.CHANNEL.sendToServer(new AnnoNetwork.BuildCommand(0, placement.id(), hover, rotation, new java.util.UUID(0, 0)));
-        } else ClientState.selected = ClientState.BUILDINGS.values().stream().filter(b -> b.contains(hover)).map(BuildingInstance::id).findFirst().orElse(null);
+        } else ClientState.selected = ClientState.visible().stream().filter(b -> b.contains(hover)).map(BuildingInstance::id).findFirst().orElse(null);
     }
     private static void roadPreview(RenderLevelStageEvent event) {
         if (hover == null) return;
@@ -184,6 +190,7 @@ public final class RtsController {
         buffers.endBatch(RenderType.lines()); pose.popPose();
     }
     @SubscribeEvent public static void preview(RenderLevelStageEvent event) {
+        if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS && inRegion()) ShipRenderer.render(event);
         if (!active || event.getStage() != RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS) return;
         if (roadMode != 0) { roadPreview(event); return; }
         BuildingInstance selected = ClientState.BUILDINGS.get(ClientState.selected);

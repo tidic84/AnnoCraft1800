@@ -1,0 +1,14 @@
+{
+  "name": "building.annocraft1800.glassworks",
+  "structure": "annocraft1800:glassworks",
+  "width": 9, "height": 8, "depth": 7,
+  "coastal": false, "level": 1,
+  "economy": {
+    "cost": {"coins": 1200, "bricks": 8},
+    "upkeep": 40,
+    "workforce": {"tier": "workers", "amount": 15},
+    "production": {"cycle": 30, "inputs": {"sand": 1}, "outputs": {"glass": 1}},
+    "world": "old",
+    "unlock": {"tier": "artisans", "residents": 1}
+  }
+}
