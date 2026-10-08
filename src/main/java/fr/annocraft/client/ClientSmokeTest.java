@@ -212,7 +212,17 @@ public final class ClientSmokeTest {
                         RtsController.placement = ClientState.DEFINITIONS.get(AnnoCraft.id("residence"));
                         RtsController.forceHover(new BlockPos(wood[0], 74, wood[1]));
                     } else if (buildShot && elapsed == 530) Screenshot.grab(mc.gameDirectory, "annocraft-forest.png", mc.getMainRenderTarget(), c -> {});
-                    else if (buildShot && elapsed > 535) {
+                    else if (buildShot && elapsed == 531) {
+                        // A pirate warship out at sea: clicked, it shows who sails it and how strong it is.
+                        RtsController.forceHover(null); RtsController.placement = null;
+                        var pirate = ShipRenderer.all().stream().filter(s -> s.contains("owner") && s.contains("world")).findFirst().orElse(null);
+                        System.out.println("ANNOCRAFT_CLIENT_SMOKE_PIRATE " + (pirate == null ? "none" : pirate.getString("owner") + " at " + pirate.getDouble("x") + ", " + pirate.getDouble("z")));
+                        if (pirate != null) {
+                            RtsController.jump(pirate.getDouble("x"), pirate.getDouble("z")); RtsController.zoomTarget = 45;
+                            RtsController.selectedShips.clear(); RtsController.inspected = pirate.getUUID("id");
+                        }
+                    } else if (buildShot && elapsed == 600) Screenshot.grab(mc.gameDirectory, "annocraft-enemy.png", mc.getMainRenderTarget(), c -> {});
+                    else if (buildShot && elapsed > 605) {
                         RtsController.forceHover(null); RtsController.placement = null; RtsScreen.openCategory = null;
                         exitX = RtsController.x; exitZ = RtsController.z;
                         RtsController.exit(); mc.setScreen(null); next();

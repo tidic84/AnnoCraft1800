@@ -83,7 +83,7 @@ public final class RtsController {
         if (previousPerspective != null) mc.options.setCameraType(previousPerspective);
         mc.options.hideGui = previousHideGui;
         active = false; anchor = null; previousCamera = null; previousPerspective = null; placement = null; hover = null; roadMode = 0; roadStart = null;
-        selectedShips.clear(); hoverShip = null;
+        selectedShips.clear(); hoverShip = null; inspected = null;
         KeyMapping.releaseAll();
     }
     /** Set by the strategic map before entering, so the camera opens where the player clicked. */
@@ -196,6 +196,9 @@ public final class RtsController {
         Vec3 ray = forward.add(right.scale((2 * mouseX / width - 1) * (double)width / height * scale))
                 .add(up.scale((1 - 2 * mouseY / height) * scale)).normalize();
         Vec3 start = eye(renderX, renderZ, renderYaw, renderZoom, renderTilt), end = start.add(ray.scale(Math.max(400, renderZoom * 3)));
+        // Where the cursor meets the sea's surface: ships sail exactly there, even past the loaded chunks.
+        double sea = fr.annocraft.world.IslandLayout.SEA_LEVEL + .9;
+        seaPoint = ray.y < -1e-4 ? new double[]{start.x + ray.x * (sea - start.y) / ray.y, start.z + ray.z * (sea - start.y) / ray.y} : null;
         // Ships first: the one whose hull lies nearest to the cursor's ray.
         hoverShip = null;
         if (placement == null && roadMode == 0) {
@@ -281,12 +284,22 @@ public final class RtsController {
     /** The player's ships selected in the management view, and the ship under the cursor. */
     public static final Set<java.util.UUID> selectedShips = new LinkedHashSet<>();
     public static java.util.UUID hoverShip;
+    /** An enemy or rival ship whose information is shown, and the sea's surface under the cursor. */
+    public static java.util.UUID inspected;
+    static double[] seaPoint;
     /** Last order's destination, shown a moment on the water. */
     static double[] orderMark; static long orderTime;
     static boolean own(java.util.UUID id) { var s = ShipRenderer.find(id); return s != null && !s.contains("owner"); }
     /** Left click on a ship: selects it (Shift adds it to the selection). @return whether a ship was clicked */
     public static boolean clickShip(boolean add) {
-        if (hoverShip == null || !own(hoverShip)) return false;
+        if (hoverShip == null) return false;
+        if (!own(hoverShip)) {
+            // An enemy or rival ship: its information, as Anno shows it, without touching the selection of our own.
+            inspected = hoverShip; ClientState.selected = null;
+            if (!add) selectedShips.clear();
+            return true;
+        }
+        inspected = null;
         if (!add) selectedShips.clear();
         if (!selectedShips.remove(hoverShip) || !add) selectedShips.add(hoverShip);
         ClientState.selected = null;
@@ -316,11 +329,12 @@ public final class RtsController {
             return true;
         }
         var layout = ClientState.layout;
-        if (hover == null || layout == null) return true;
-        int h = layout.height(hover.getX(), hover.getZ());
-        if (h < fr.annocraft.world.IslandLayout.SEA_LEVEL - 1) {
-            AnnoNetwork.action("ship_goto", "ships", ids, "x", hover.getX() + .5, "z", hover.getZ() + .5);
-            mark(hover.getX() + .5, hover.getZ() + .5);
+        if (layout == null) return true;
+        boolean land = hover != null && layout.height(hover.getX(), hover.getZ()) >= fr.annocraft.world.IslandLayout.SEA_LEVEL;
+        if (!land) {
+            if (seaPoint == null) return true;
+            AnnoNetwork.action("ship_goto", "ships", ids, "x", seaPoint[0], "z", seaPoint[1]);
+            mark(seaPoint[0], seaPoint[1]);
             return true;
         }
         var island = layout.islandAt(hover.getX(), hover.getZ()).orElse(null);

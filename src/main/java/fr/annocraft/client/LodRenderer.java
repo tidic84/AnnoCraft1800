@@ -210,7 +210,17 @@ public final class LodRenderer {
         s.safeGetUniform("HazeColor").set((float) (sky.x * .6 + haze * .4), (float) (sky.y * .6 + haze * .42), (float) (sky.z * .6 + haze * .45));
         double eye = cam.y - CameraMath.GROUND, reach = reach(RtsController.zoom, ClientState.regionSize);
         s.safeGetUniform("HazeRange").set((float) (eye + 350), (float) (eye + reach * 1.3 + 800));
-        s.safeGetUniform("Grade").set(shaders() ? 1f : 0f);
+        boolean shaders = shaders();
+        s.safeGetUniform("Grade").set(shaders ? 1f : 0f);
+        s.safeGetUniform("Vanilla").set(shaders ? 0f : 1f);
+        s.safeGetUniform("Daylight").set(mc.level.getSkyDarken(pt));
+        if (!shaders) {
+            // Vanilla look: the haze is the game's own horizon colour, and only begins past the real chunks, which have no fog here.
+            float[] fog = RenderSystem.getShaderFogColor();
+            s.safeGetUniform("HazeColor").set(fog[0], fog[1], fog[2]);
+            double chunks = mc.options.getEffectiveRenderDistance() * 16;
+            s.safeGetUniform("HazeRange").set((float) (eye + chunks + 200), (float) (eye + chunks + reach * 1.5 + 1500));
+        }
     }
     private static double smooth(double a, double b, double x) { double t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); }
     private static void drawAll(Matrix4f view, Matrix4f projection, Vec3 cam, List<Key> wanted) {

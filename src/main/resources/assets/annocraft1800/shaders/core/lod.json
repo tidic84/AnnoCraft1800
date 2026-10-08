@@ -13,6 +13,8 @@
         { "name": "SkyLight", "type": "float", "count": 3, "values": [ 0.42, 0.46, 0.52 ] },
         { "name": "HazeColor", "type": "float", "count": 3, "values": [ 0.66, 0.77, 0.86 ] },
         { "name": "HazeRange", "type": "float", "count": 2, "values": [ 600.0, 5000.0 ] },
-        { "name": "Grade", "type": "float", "count": 1, "values": [ 0.0 ] }
+        { "name": "Grade", "type": "float", "count": 1, "values": [ 0.0 ] },
+        { "name": "Vanilla", "type": "float", "count": 1, "values": [ 1.0 ] },
+        { "name": "Daylight", "type": "float", "count": 1, "values": [ 1.0 ] }
     ]
 }

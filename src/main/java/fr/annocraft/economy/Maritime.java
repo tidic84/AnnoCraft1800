@@ -111,7 +111,17 @@ public final class Maritime {
         Ship s = mine(id); Colony.Navigation nav = colony.navigation();
         if (s == null || nav == null || s.world == null) return "invalid_ship";
         if (s.sailing() && !s.world.equals(colony.geography().world(s.to))) return "ship_away";
-        if (!nav.water(s.world).at((int) Math.floor(x), (int) Math.floor(z))) return "not_water";
+        SeaRoutes.Water water = nav.water(s.world);
+        if (!water.at((int) Math.floor(x), (int) Math.floor(z))) {
+            // A click on the shallows: the nearest water deep enough, if close.
+            double[] near = null;
+            for (int r = 1; r <= 16 && near == null; r++) for (int a = 0; a < 16 && near == null; a++) {
+                double px = x + Math.cos(a * Math.PI / 8) * r, pz = z + Math.sin(a * Math.PI / 8) * r;
+                if (water.at((int) Math.floor(px), (int) Math.floor(pz))) near = new double[]{px, pz};
+            }
+            if (near == null) return "not_water";
+            x = near[0]; z = near[1];
+        }
         s.route.clear(); s.order = "goto"; s.target = null; s.at = null; s.from = null; s.to = null;
         lane(colony, s, x, z);
         return null;
@@ -295,7 +305,6 @@ public final class Maritime {
             long afloat = ships.values().stream().filter(s -> f.id().equals(s.owner)).count();
             double wait = musters.merge(f.id(), -dt, Double::sum);
             if (afloat >= (f.pirate() ? 2 : f.level()) || wait > 0) continue;
-            musters.put(f.id(), 300.0);
             for (String island : colony.diplomacy().factionIslands(f.id())) {
                 String world = colony.geography().world(island);
                 if (colony.ports().stream().noneMatch(p -> colony.geography().world(p).equals(world))) continue;
@@ -305,6 +314,8 @@ public final class Maritime {
                 s.world = world; double[] d = nav.dock(island, 0); s.x = d[0]; s.z = d[1]; s.hx = d[4]; s.hz = d[5];
                 ships.put(s.id, s);
                 colony.event(Colony.Event.of(false, "event.annocraft1800.enemy_fleet", "#faction.annocraft1800." + f.id(), island));
+                // The next warship sails out five minutes later.
+                musters.put(f.id(), 300.0);
                 break;
             }
         }

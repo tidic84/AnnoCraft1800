@@ -388,6 +388,7 @@ public final class RtsScreen extends Screen {
         BuildingInstance selected = ClientState.BUILDINGS.get(ClientState.selected);
         if (selected != null) objectMenu(g, selected);
         else if (!RtsController.selectedShips.isEmpty()) shipMenu(g);
+        else if (RtsController.inspected != null) enemyMenu(g);
         shipBars(g);
         if (box != null) { int x0 = (int) Math.min(box[0], box[2]), y0 = (int) Math.min(box[1], box[3]), x1 = (int) Math.max(box[0], box[2]), y1 = (int) Math.max(box[1], box[3]); g.fill(x0, y0, x1, y1, 0x30f0d898); MapView.frame(g, x0, y0, x1 - x0, y1 - y0, UiKit.GOLD); }
         super.render(g, mouseX, mouseY, partialTick);
@@ -742,6 +743,37 @@ public final class RtsScreen extends Screen {
             g.drawString(font, line, x + 5, ly, UiKit.MUTED, false); ly += 9;
         }
     }
+    /** Information on an enemy or rival ship: who sails it, in person, its hull and guns, how things stand with them. */
+    private void enemyMenu(GuiGraphics g) {
+        CompoundTag s = ShipRenderer.find(RtsController.inspected);
+        if (s == null) { RtsController.inspected = null; return; }
+        String owner = s.getString("owner"); Maritime.ShipType t = Maritime.type(s.getString("type"));
+        int x = infoX, y = infoY, w = INFO_W;
+        UiKit.panel(g, x, y, w, infoH); dyn(x, y, w, infoH);
+        boolean company = s.getBoolean("company");
+        var crew = company ? ColonyScreen.crew(owner) : List.<fr.annocraft.economy.Company.Member>of();
+        int color = company ? ClientState.colorOf(owner) : MapView.ownerColor(owner) & 0xffffff;
+        if (!crew.isEmpty()) Avatars.portrait(g, crew.get(0).avatar(), crew.get(0).player(), x + 4, y + 4, 30, 30, color, false, 3);
+        else if (!company) Avatars.portrait(g, Avatars.character(owner), null, x + 4, y + 4, 30, 30, color, false, 3);
+        UiKit.text(g, Component.literal(s.getString("name")), x + 38, y + 5, UiKit.BAD, w - 42);
+        UiKit.text(g, Component.translatable("ship.annocraft1800." + s.getString("type")), x + 38, y + 15, UiKit.MUTED, w - 42);
+        UiKit.text(g, ClientState.ownerName(owner), x + 38, y + 25, UiKit.TEXT, w - 42);
+        int ly = y + 40;
+        String stance = company ? ColonyScreen.rivals().stream().filter(r -> r.getString("id").equals(owner)).map(r -> r.getString("stance")).findFirst().orElse("PEACE")
+                : ColonyScreen.faction(owner).getString("stance");
+        if (!stance.isEmpty()) { UiKit.text(g, Component.translatable("stance.annocraft1800." + stance.toLowerCase(Locale.ROOT)), x + 5, ly, ColonyScreen.stanceColor(stance), w - 10); ly += 11; }
+        if (t != null) {
+            double hp = s.getDouble("hp") / t.hp();
+            UiKit.bar(g, x + 5, ly, w - 10, 4, hp, UiKit.BAD);
+            tip(x + 5, ly - 2, w - 10, 8, Component.translatable("colony.annocraft1800.ship_hp", (int) s.getDouble("hp"), t.hp()));
+            ly += 8;
+            UiKit.text(g, Component.translatable("screen.annocraft1800.ship_attack", t.attack()), x + 5, ly, UiKit.TEXT, w - 10); ly += 12;
+        }
+        for (var line : font.split(Component.translatable("screen.annocraft1800.enemy_hint"), w - 10)) {
+            if (ly > y + infoH - 10) break;
+            g.drawString(font, line, x + 5, ly, UiKit.MUTED, false); ly += 9;
+        }
+    }
     /** Hull bars over the ships near the camera: the player's in green, enemies in red with their name. */
     private void shipBars(GuiGraphics g) {
         if (RtsController.zoom > 400) return;
@@ -813,6 +845,7 @@ public final class RtsScreen extends Screen {
             if (RtsController.placement == null && RtsController.roadMode == 0) {
                 if (RtsController.clickShip(hasShiftDown())) { rebuild(); return true; }
                 if (!hasShiftDown()) RtsController.selectedShips.clear();
+                RtsController.inspected = null;
                 box = new double[]{x, y, x, y};
             }
             RtsController.clickWorld();
@@ -854,7 +887,7 @@ public final class RtsScreen extends Screen {
         return super.mouseReleased(x, y, button);
     }
     private void cancelTool() {
-        RtsController.placement = null; RtsController.roadMode = 0; RtsController.roadStart = null; ClientState.selected = null; RtsController.selectedShips.clear(); rebuild();
+        RtsController.placement = null; RtsController.roadMode = 0; RtsController.roadStart = null; ClientState.selected = null; RtsController.selectedShips.clear(); RtsController.inspected = null; rebuild();
     }
     @Override public boolean mouseScrolled(double x, double y, double delta) {
         if (x >= menuX && x < menuX + menuW && y >= menuY && y < menuY + menuH) {

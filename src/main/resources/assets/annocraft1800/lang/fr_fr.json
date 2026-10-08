@@ -281,6 +281,7 @@
   "screen.annocraft1800.squadron": "Escadre : %s navires",
   "screen.annocraft1800.ship_orders_hint": "Clic droit sur la mer : naviguer · sur un navire ennemi : l’attaquer · sur votre île : accoster · sur une île ennemie : assiéger",
   "screen.annocraft1800.manage_fleet": "Gérer (routes, escorte)",
+  "screen.annocraft1800.enemy_hint": "Sélectionnez vos navires de guerre puis faites un clic droit sur ce navire pour l’attaquer.",
   "message.annocraft1800.not_water": "Les navires ne naviguent que sur l’eau assez profonde.",
   "message.annocraft1800.ship_away": "Ce navire est dans l’autre monde.",
   "event.annocraft1800.enemy_sunk": "%s (%s) est coulé ! Butin : %s or.",

@@ -280,6 +280,7 @@
   "screen.annocraft1800.squadron": "Squadron: %s ships",
   "screen.annocraft1800.ship_orders_hint": "Right click on the sea: sail · on an enemy ship: attack it · on your island: moor · on an enemy island: besiege",
   "screen.annocraft1800.manage_fleet": "Manage (routes, escort)",
+  "screen.annocraft1800.enemy_hint": "Select your warships, then right click this ship to attack it.",
   "message.annocraft1800.not_water": "Ships only sail on deep enough water.",
   "message.annocraft1800.ship_away": "This ship is in the other world.",
   "event.annocraft1800.enemy_sunk": "%s (%s) is sunk! Loot: %s gold.",
