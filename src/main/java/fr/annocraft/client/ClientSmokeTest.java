@@ -42,11 +42,11 @@ public final class ClientSmokeTest {
         double start = Math.atan2(z - island.z(), x - island.x());
         for (int step = 0; step < 360; step += 2) for (int sign : new int[]{1, -1}) for (double r = .82; r <= .96; r += .015) {
             double a = start + Math.toRadians(step * sign), coast = 1 + .07 * Math.sin(a * 3 + island.phase()) + .04 * Math.cos(a * 5 - island.phase());
-            int px = (int) Math.round(island.x() + Math.cos(a) * island.radiusX() * r * coast) - def.width() / 2;
-            int pz = (int) Math.round(island.z() + Math.sin(a) * island.radiusZ() * r * coast) - def.depth() / 2;
+            int px = (int) Math.round(island.x() + Math.cos(a) * island.radiusX() * r * coast);
+            int pz = (int) Math.round(island.z() + Math.sin(a) * island.radiusZ() * r * coast);
             if (avoid != null && Math.abs(px - avoid[0]) < 16 && Math.abs(pz - avoid[1]) < 16) continue;
-            int rotation = fr.annocraft.building.Siting.coastRotation(ClientState.layout, def, px, pz, 0);
-            if (rotation >= 0) return new int[]{px, pz, rotation};
+            int[] site = fr.annocraft.building.Siting.snap(ClientState.layout, def, px, pz, 0, 6);
+            if (site != null) return site;
         }
         return null;
     }

@@ -302,10 +302,15 @@ public final class GenerateContent {
                 p.flag(9, 1, spire + 4, "red_wool");
                 // Quay: bollards along the edge, crates and bales, the crane over the water.
                 for (int x : new int[]{0, 4, 8}) { p.set(x, 1, d - 1, "stone_brick_wall"); p.set(x, 2, d - 1, "chain[axis=y]"); }
+                for (int z = 8; z < d - 1; z += 3) { p.set(0, 1, z, "stone_brick_wall"); p.set(w - 1, 1, z, "stone_brick_wall"); }
                 p.fill(1, 1, 6, 2, 1, 7, "barrel[facing=up,open=false]"); p.set(1, 2, 6, "barrel[facing=up,open=false]");
                 p.set(4, 1, 6, "hay_block[axis=x]"); p.set(5, 1, 6, "hay_block[axis=x]"); p.set(5, 2, 6, "white_wool"); p.set(6, 1, 7, "brown_wool");
                 p.set(3, 1, 4, "spruce_planks"); p.set(3, 2, 4, "spruce_slab[type=bottom]");
-                p.crane(9, 5, 7, 8);
+                // Cargo waiting at the end of the quay for the next ship.
+                p.fill(2, 1, 9, 3, 1, 10, "oak_planks"); p.set(2, 2, 9, "spruce_slab[type=bottom]");
+                p.set(5, 1, 10, "barrel[facing=up,open=false]"); p.set(6, 1, 10, "white_wool"); p.set(6, 2, 10, "white_wool");
+                p.crane(9, 6, 7, 10);
+                p.lamp(w - 1, d - 1, "spruce_fence");
                 p.lamp(7, 4, "spruce_fence"); p.lamp(0, 4, "spruce_fence");
             }
             case "warehouse" -> {

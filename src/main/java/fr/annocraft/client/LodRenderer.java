@@ -37,16 +37,29 @@ import java.util.concurrent.*;
  * distance, far short of the management camera: there the game's far plane is pushed out, the scene's depth is kept
  * at the end of the level pass, and the distant view is drawn over the shader's finished picture against that depth,
  * leaving to the real blocks the chunks the shader still shows clearly.
+ * <p>
+ * Transitions are soft, as in Voxy: the level of detail follows the size of a column on screen (with some slack so
+ * it does not flicker), a region whose mesh changes dissolves from the old mesh into the new one, region borders
+ * have skirts so neighbours of different detail never leave cracks, and the real chunks fade into the distant view
+ * over a band along the edge of the loaded area instead of stopping on a hard line.
  */
 @Mod.EventBusSubscriber(modid = AnnoCraft.ID, value = Dist.CLIENT)
 public final class LodRenderer {
     public static final int REGION = 128;
-    private static final int SAND = 0xd8cc94, GRASS_OLD = 0x6e9e3c, GRASS_NEW = 0x5c9a36, FOREST_OLD = 0x3d6a2a, FOREST_DARK = 0x2c5230,
+    private static final int SAND = 0xd8cc94, GRASS_OLD = 0x546e30, GRASS_NEW = 0x45692d, FOREST_OLD = 0x3d6a2a, FOREST_DARK = 0x2c5230,
             JUNGLE = 0x2e7a2a, ROCK = 0x84837f, SLOT = 0x6e5a45, CLAY = 0xa36a4e, QUARTZ = 0xe3d9b5, OCEAN = 0x2a5d8f, HAZE = 0xa9c4dc,
             SHALLOW = 0x3fa7b4, LAGOON = 0x3584a8;
     private record Key(String world, int rx, int rz) { }
     /** Colours carry the face they belong to in their top byte (0 for tops), turned into normals at upload. */
-    private record Mesh(float[] positions, int[] colors, int vertices) { }
+    private record Mesh(float[] positions, int[] colors, byte[] alphas, int vertices) { }
+    /** A region's distant view, and the part of it that fades over the real chunks along the loaded area's edge. */
+    private record Meshes(Mesh main, Mesh band) { }
+    /** Width of the band where real chunks fade into the distant view, in blocks (at most the chunk margin below). */
+    private static final int BAND = 32, MARGIN = 2, FIELD = REGION / 16 + 2 * MARGIN;
+    /** How long a region takes to dissolve from its old mesh into its new one, in milliseconds. */
+    private static final int DISSOLVE = 450;
+    /** Largest size of a column on screen, in pixels, before the distant view switches to finer columns. */
+    private static final double PIXELS = 3;
     private static final int WEST = 1 << 24, EAST = 2 << 24, NORTH = 3 << 24, SOUTH = 4 << 24;
     private static final float[][] NORMALS = {{0, 1, 0}, {-1, 0, 0}, {1, 0, 0}, {0, 0, -1}, {0, 0, 1}};
     private static ShaderInstance lodShader;
@@ -57,10 +70,23 @@ public final class LodRenderer {
             event.registerShader(new ShaderInstance(event.getResourceProvider(), AnnoCraft.id("lod"), DefaultVertexFormat.POSITION_COLOR_NORMAL), s -> lodShader = s);
         }
     }
+    /**
+     * No clouds in the management view, as in Anno: with the far plane pushed out (see {@link #farPlane}) the cloud
+     * layer would lie between the camera and the islands. The archipelago uses the overworld's sky.
+     */
+    @Mod.EventBusSubscriber(modid = AnnoCraft.ID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
+    public static final class Sky {
+        @SubscribeEvent public static void register(RegisterDimensionSpecialEffectsEvent event) {
+            event.register(net.minecraft.world.level.dimension.BuiltinDimensionTypes.OVERWORLD_EFFECTS, new net.minecraft.client.renderer.DimensionSpecialEffects.OverworldEffects() {
+                @Override public boolean renderClouds(net.minecraft.client.multiplayer.ClientLevel level, int ticks, float partialTick, PoseStack poseStack,
+                                                      double camX, double camY, double camZ, Matrix4f projection) { return RtsController.active; }
+            });
+        }
+    }
     private static final class Region {
-        VertexBuffer buffer; int vertices, step = -1; long revision = Long.MIN_VALUE, seen = Long.MIN_VALUE, mask; boolean structures;
-        long meshedAt;
-        Future<Mesh> pending; int pendingStep; long pendingRevision, pendingSeen, pendingMask; boolean pendingStructures;
+        VertexBuffer buffer, band, old; int vertices, step = -1; long revision = Long.MIN_VALUE, seen = Long.MIN_VALUE; BitSet clear = new BitSet(); boolean structures;
+        long meshedAt, dissolveAt = Long.MIN_VALUE;
+        Future<Meshes> pending; int pendingStep; long pendingRevision, pendingSeen; BitSet pendingClear; boolean pendingStructures;
     }
     private static final Map<Key, Region> REGIONS = new HashMap<>();
     private static final ExecutorService WORKERS = Executors.newFixedThreadPool(2, r -> { Thread t = new Thread(r, "AnnoCraft distant view"); t.setDaemon(true); t.setPriority(Thread.MIN_PRIORITY); return t; });
@@ -71,8 +97,19 @@ public final class LodRenderer {
     private static boolean builtForShaders;
     private LodRenderer() { }
 
-    /** Mesh resolution by distance from the eye: single blocks nearby, 16-block columns at the horizon. */
-    static int step(double distance) { return distance < 300 ? 1 : distance < 700 ? 2 : distance < 1500 ? 4 : distance < 3000 ? 8 : 16; }
+    /**
+     * Mesh resolution from the size of a column on screen: the coarsest columns that stay under {@link #PIXELS}
+     * pixels, from single blocks nearby to 16-block columns at the horizon. The current resolution is kept until the
+     * ideal one is clearly past it, so a region at the threshold does not switch back and forth.
+     * @param pixelsPerBlock pixels covered by one block one block away from the eye
+     */
+    static int step(double distance, double pixelsPerBlock, int current) {
+        double ideal = distance * PIXELS / pixelsPerBlock;
+        if (current > 0 && ideal >= current * .8 && ideal < current * 2.4) return current;
+        int step = 1;
+        while (step < 16 && step * 2 <= ideal) step *= 2;
+        return step;
+    }
     /** How far the distant view reaches for a zoom level. */
     static double reach(float zoom, int size) { return Math.min(size * .8, Math.max(640, zoom * 7)); }
 
@@ -94,15 +131,17 @@ public final class LodRenderer {
         try { return (Boolean) shaderInUse.invoke(irisApi); } catch (ReflectiveOperationException e) { return false; }
     }
     /**
-     * With shaders the game's own projection draws the distant view, so its far plane (four times the render
-     * distance) must reach the horizon of the management camera. The game renderer resets it at the start of every
-     * frame; the field-of-view event comes after that and just before the projection is built.
+     * The game's own projection draws the fade band over the real chunks (and the whole distant view with shaders),
+     * so its far plane (four times the render distance) must reach the edge of the loaded area, or the horizon of the
+     * management camera with shaders. The game renderer resets it at the start of every frame; the field-of-view event
+     * comes after that and just before the projection is built.
      */
     @SubscribeEvent public static void farPlane(ViewportEvent.ComputeFov event) {
-        if (!RtsController.active || ClientState.layout == null || !shaders()) return;
+        if (!RtsController.active || ClientState.layout == null) return;
         Minecraft mc = Minecraft.getInstance();
         double eye = RtsController.zoom / Math.sin(Math.toRadians(CameraMath.pitch(RtsController.zoom, RtsController.tilt)));
-        float needed = (float) ((eye + reach(RtsController.zoom, ClientState.layout.size())) / 4);
+        double beyond = shaders() ? reach(RtsController.zoom, ClientState.layout.size()) : mc.options.getEffectiveRenderDistance() * 16 * 1.5 + BAND;
+        float needed = (float) ((eye + beyond) / 4);
         if (mc.gameRenderer.renderDistance < needed) mc.gameRenderer.renderDistance = needed;
     }
 
@@ -117,10 +156,23 @@ public final class LodRenderer {
     private static boolean depthLogged;
     private static boolean sceneCaptured;
 
+    /** Regions drawn this frame, for the fade band drawn over the real chunks at the end of the level pass. */
+    private static List<Key> frameRegions;
+
     @SubscribeEvent public static void render(RenderLevelStageEvent event) {
         if (!RtsController.active) return;
         boolean shaders = shaders();
         if (shaders && event.getStage() == RenderLevelStageEvent.Stage.AFTER_LEVEL) { captureDepth(); return; }
+        if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_LEVEL) {
+            // Without shaders the real chunks are drawn by now, with the game's projection: the band fades over their edge.
+            if (frameRegions != null) {
+                Matrix4f saved = RenderSystem.getProjectionMatrix();
+                drawBands(event.getPoseStack().last().pose(), new Matrix4f(event.getProjectionMatrix()), event.getCamera().getPosition(), frameRegions);
+                RenderSystem.setProjectionMatrix(saved, com.mojang.blaze3d.vertex.VertexSorting.DISTANCE_TO_ORIGIN);
+                frameRegions = null;
+            }
+            return;
+        }
         if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_SKY) return;
         IslandLayout layout = ClientState.layout; if (layout == null) return;
         if (built != layout || builtForShaders != shaders) { clear(); built = layout; builtForShaders = shaders; }
@@ -149,23 +201,23 @@ public final class LodRenderer {
         }
         wanted.sort(Comparator.comparingDouble(k -> distance(k, cam)));
         int submitted = 0; long now = System.currentTimeMillis();
+        double pixelsPerBlock = projection.m11() * mc.getWindow().getHeight() / 2.0;
         for (Key k : wanted) {
             Region region = REGIONS.computeIfAbsent(k, key -> new Region());
-            int step = step(distance(k, cam));
-            collect(region);
+            collect(region, now);
+            int step = step(distance(k, cam), pixelsPerBlock, region.step);
             LodCache.Region seenRegion = LodCache.region(k.rx, k.rz);
             long seen = seenRegion == null ? Long.MIN_VALUE : seenRegion.version;
-            long mask = shaders ? clearChunks(mc, k, cam) : 0;
-            boolean stale = region.step != step || region.revision != revision || region.mask != mask
+            BitSet clear = clearChunks(mc, k, cam, shaders);
+            boolean stale = region.step != step || region.revision != revision || !region.clear.equals(clear)
                     // Fresh samples are folded in at most every two seconds per region.
                     || (region.seen != seen && now - region.meshedAt > 2000);
             if (stale && region.pending == null && submitted < 6) {
                 Map<Long, int[]> roofs = roofs(k);
                 // A new colony revision only matters to regions with buildings, now or before.
-                if (region.step == step && region.seen == seen && region.mask == mask && roofs.isEmpty() && !region.structures) { region.revision = revision; continue; }
-                region.pendingStep = step; region.pendingRevision = revision; region.pendingStructures = !roofs.isEmpty(); region.pendingSeen = seen; region.pendingMask = mask;
-                double haze = distance(k, cam);
-                region.pending = WORKERS.submit(() -> mesh(layout, k.rx, k.rz, step, roofs, haze, mask));
+                if (region.step == step && region.seen == seen && region.clear.equals(clear) && roofs.isEmpty() && !region.structures) { region.revision = revision; continue; }
+                region.pendingStep = step; region.pendingRevision = revision; region.pendingStructures = !roofs.isEmpty(); region.pendingSeen = seen; region.pendingClear = clear;
+                region.pending = WORKERS.submit(() -> mesh(layout, k.rx, k.rz, step, roofs, clear, shaders));
                 submitted++;
             }
         }
@@ -175,6 +227,7 @@ public final class LodRenderer {
         } else {
             drawAll(view, projection, cam, wanted);
             RenderSystem.clear(GL11.GL_DEPTH_BUFFER_BIT, Minecraft.ON_OSX);
+            frameRegions = wanted;
         }
         // Forget regions far behind the camera so memory stays bounded.
         if (REGIONS.size() > wanted.size() * 3 + 256) {
@@ -231,26 +284,69 @@ public final class LodRenderer {
         RenderSystem.depthMask(false);
         draw(ocean, view, projection, shader, -cam.x, -cam.y, -cam.z);
         RenderSystem.depthMask(true);
+        long now = System.currentTimeMillis();
         for (Key k : wanted) {
             Region region = REGIONS.get(k);
-            if (region != null && region.buffer != null && region.vertices > 0)
-                draw(region.buffer, view, projection, shader, k.rx * REGION - cam.x, -cam.y, k.rz * REGION - cam.z);
+            if (region == null) continue;
+            double dx = k.rx * REGION - cam.x, dz = k.rz * REGION - cam.z;
+            // A new mesh dissolves in over the old one:
+            // complementary noise patterns, so every pixel shows exactly one of the two.
+            float t = region.dissolveAt == Long.MIN_VALUE ? 1 : (float) Math.min(1, (now - region.dissolveAt) / (double) DISSOLVE);
+            if (t >= 1 && region.old != null) { region.old.close(); region.old = null; }
+            if (region.old != null) { dissolve(shader, -t); draw(region.old, view, projection, shader, dx, -cam.y, dz); }
+            if (region.buffer != null) { dissolve(shader, t < 1 ? Math.max(t, 1e-4f) : 0); draw(region.buffer, view, projection, shader, dx, -cam.y, dz); }
         }
+        dissolve(shader, 0);
         VertexBuffer.unbind();
         RenderSystem.enableCull();
     }
+    private static void dissolve(ShaderInstance shader, float amount) { if (shader == lodShader) shader.safeGetUniform("Dissolve").set(amount); }
     /**
-     * Chunks the shader shows clearly, one bit each: loaded and nearer than the shader's fog. Their real blocks stand
-     * in for the distant view; farther chunks, fogged away by the shader, are covered by it.
+     * The band where the real chunks fade into the distant view, drawn over them with the game's projection: first
+     * its depth alone (pulled slightly forward, so it wins over the real ground it lies on), then its colour blended
+     * on the nearest surface only, so the band's own hidden faces never show through.
      */
-    private static long clearChunks(Minecraft mc, Key k, Vec3 cam) {
-        double fog = mc.options.getEffectiveRenderDistance() * 16;
-        long mask = 0; int c0 = k.rx * (REGION / 16), d0 = k.rz * (REGION / 16);
-        for (int i = 0; i < 8; i++) for (int j = 0; j < 8; j++) {
-            double dx = (c0 + i) * 16 + 8 - cam.x, dz = (d0 + j) * 16 + 8 - cam.z, dy = cam.y - 70;
-            if (mc.level.hasChunk(c0 + i, d0 + j) && dx * dx + dy * dy + dz * dz < fog * fog) mask |= 1L << (i * 8 + j);
+    private static void drawBands(Matrix4f view, Matrix4f projection, Vec3 cam, List<Key> wanted) {
+        if (lodShader == null) return;
+        light(lodShader, cam);
+        dissolve(lodShader, 0);
+        RenderSystem.enableDepthTest(); RenderSystem.depthFunc(GL11.GL_LEQUAL); RenderSystem.disableCull();
+        RenderSystem.enablePolygonOffset(); RenderSystem.polygonOffset(-2, -40);
+        for (int pass = 0; pass < 2; pass++) {
+            RenderSystem.colorMask(pass == 1, pass == 1, pass == 1, pass == 1);
+            RenderSystem.depthMask(pass == 0);
+            for (Key k : wanted) {
+                Region region = REGIONS.get(k);
+                if (region != null && region.band != null)
+                    draw(region.band, view, projection, lodShader, k.rx * REGION - cam.x, -cam.y, k.rz * REGION - cam.z);
+            }
         }
-        return mask;
+        VertexBuffer.unbind();
+        RenderSystem.colorMask(true, true, true, true); RenderSystem.depthMask(true);
+        RenderSystem.disablePolygonOffset(); RenderSystem.enableCull(); RenderSystem.defaultBlendFunc();
+    }
+    /**
+     * Chunks whose real blocks are on screen, one bit each over the region and a margin of {@link #MARGIN} chunks
+     * around it: loaded and within the render distance (nearer than the shader's fog with a shader pack). The
+     * distant view fades out over them, and with shaders leaves a hole for them.
+     */
+    private static BitSet clearChunks(Minecraft mc, Key k, Vec3 cam, boolean shaders) {
+        int distance = mc.options.getEffectiveRenderDistance();
+        double fog = distance * 16;
+        int camX = (int) Math.floor(cam.x) >> 4, camZ = (int) Math.floor(cam.z) >> 4;
+        BitSet clear = new BitSet(FIELD * FIELD);
+        int c0 = k.rx * (REGION / 16) - MARGIN, d0 = k.rz * (REGION / 16) - MARGIN;
+        for (int i = 0; i < FIELD; i++) for (int j = 0; j < FIELD; j++) {
+            int cx = c0 + i, cz = d0 + j;
+            if (!mc.level.hasChunk(cx, cz)) continue;
+            boolean shown;
+            if (shaders) {
+                double dx = cx * 16 + 8 - cam.x, dz = cz * 16 + 8 - cam.z, dy = cam.y - 70;
+                shown = dx * dx + dy * dy + dz * dz < fog * fog;
+            } else shown = Math.max(Math.abs(cx - camX), Math.abs(cz - camZ)) <= distance;
+            if (shown) clear.set(i * FIELD + j);
+        }
+        return clear;
     }
     /** With shaders, keeps the scene's depth at the end of the level pass, before the shader's composite overwrites the picture. */
     private static void captureDepth() {
@@ -307,6 +403,7 @@ public final class LodRenderer {
         RenderSystem.enablePolygonOffset(); RenderSystem.polygonOffset(-2, -40);
         Matrix4f saved = RenderSystem.getProjectionMatrix();
         drawAll(laterView, laterProjection, laterCamera, laterRegions);
+        drawBands(laterView, laterProjection, laterCamera, laterRegions);
         RenderSystem.disablePolygonOffset();
         RenderSystem.setProjectionMatrix(saved, com.mojang.blaze3d.vertex.VertexSorting.ORTHOGRAPHIC_Z);
         RenderSystem.clear(GL11.GL_DEPTH_BUFFER_BIT, Minecraft.ON_OSX);
@@ -323,16 +420,22 @@ public final class LodRenderer {
             if (x0 <= i.x() + i.radiusX() * 1.25 && x0 + REGION >= i.x() - i.radiusX() * 1.25 && z0 <= i.z() + i.radiusZ() * 1.25 && z0 + REGION >= i.z() - i.radiusZ() * 1.25) return true;
         return false;
     }
-    private static void collect(Region region) {
+    private static void collect(Region region, long now) {
         if (region.pending == null || !region.pending.isDone()) return;
         try {
-            Mesh mesh = region.pending.get();
-            if (region.buffer != null) region.buffer.close();
-            region.buffer = mesh.vertices == 0 ? null : upload(mesh); region.vertices = mesh.vertices;
+            Meshes meshes = region.pending.get();
+            // The current mesh stays a moment as the old one, dissolving away under the new.
+            if (region.old != null) region.old.close();
+            region.old = region.buffer;
+            // A region seen for the first time just appears: dissolving it in would show the open sea through it.
+            region.dissolveAt = region.old == null ? Long.MIN_VALUE : now;
+            region.buffer = meshes.main.vertices == 0 ? null : upload(meshes.main); region.vertices = meshes.main.vertices;
+            if (region.band != null) region.band.close();
+            region.band = meshes.band.vertices == 0 ? null : upload(meshes.band);
             region.step = region.pendingStep; region.revision = region.pendingRevision; region.structures = region.pendingStructures;
-            region.seen = region.pendingSeen; region.mask = region.pendingMask; region.meshedAt = System.currentTimeMillis();
+            region.seen = region.pendingSeen; region.clear = region.pendingClear; region.meshedAt = now;
         } catch (InterruptedException | ExecutionException | CancellationException e) {
-            region.step = region.pendingStep; region.revision = region.pendingRevision; region.seen = region.pendingSeen; region.mask = region.pendingMask;
+            region.step = region.pendingStep; region.revision = region.pendingRevision; region.seen = region.pendingSeen; region.clear = region.pendingClear;
         }
         region.pending = null;
     }
@@ -341,7 +444,7 @@ public final class LodRenderer {
         builder.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR_NORMAL);
         for (int i = 0; i < mesh.vertices; i++) {
             int c = mesh.colors[i];
-            builder.vertex(mesh.positions[i * 3], mesh.positions[i * 3 + 1], mesh.positions[i * 3 + 2]).color(c >> 16 & 255, c >> 8 & 255, c & 255, 255)
+            builder.vertex(mesh.positions[i * 3], mesh.positions[i * 3 + 1], mesh.positions[i * 3 + 2]).color(c >> 16 & 255, c >> 8 & 255, c & 255, mesh.alphas[i] & 255)
                     .normal(NORMALS[c >>> 24][0], NORMALS[c >>> 24][1], NORMALS[c >>> 24][2]).endVertex();
         }
         VertexBuffer buffer = new VertexBuffer(VertexBuffer.Usage.STATIC);
@@ -349,8 +452,8 @@ public final class LodRenderer {
         return buffer;
     }
     private static void release(Region region) {
-        if (region.buffer != null) region.buffer.close();
-        region.buffer = null;
+        for (VertexBuffer b : new VertexBuffer[]{region.buffer, region.band, region.old}) if (b != null) b.close();
+        region.buffer = null; region.band = null; region.old = null;
         if (region.pending != null) region.pending.cancel(false);
     }
     public static void clear() {
@@ -453,7 +556,11 @@ public final class LodRenderer {
         if (h < 0) return -1;
         return (long) h << 32 | (shade(col, .94 + IslandLayout.hash(px, 2, pz, 4) * .12) & 0xffffffL);
     }
-    private static Mesh mesh(IslandLayout l, int rx, int rz, int step, Map<Long, int[]> roofs, double distance, long hidden) {
+    /**
+     * @param clear chunks whose real blocks are on screen (see {@link #clearChunks}): the band fades over them, and
+     *              with {@code holes} (shaders) the distant view itself leaves them to the real blocks
+     */
+    private static Meshes mesh(IslandLayout l, int rx, int rz, int step, Map<Long, int[]> roofs, BitSet clear, boolean holes) {
         int n = REGION / step, x0 = rx * REGION, z0 = rz * REGION;
         LodCache.Region[] seen = new LodCache.Region[9];
         for (int i = -1; i <= 1; i++) for (int j = -1; j <= 1; j++) seen[(i + 1) * 3 + j + 1] = LodCache.peek(rx + i, rz + j);
@@ -463,50 +570,92 @@ public final class LodRenderer {
             int index = (i + 1) * (n + 2) + (j + 1);
             height[index] = v < 0 ? -1 : (int) (v >> 32); color[index] = (int) (v & 0xffffff);
         }
-        float[] positions = new float[Math.min(n * n * 5, 120_000) * 4 * 3]; int[] colors = new int[positions.length / 3]; int[] count = {0};
+        Builder main = new Builder(Math.min(n * n * 5, 120_000) * 4, null);
+        Builder band = new Builder(1024, fade(clear, x0, z0));
         for (int i = 0; i < n; i++) for (int j = 0; j < n; j++) {
             int wx = x0 + i * step, wz = z0 + j * step;
+            boolean real = clear.get((((wx - x0) >> 4) + MARGIN) * FIELD + ((wz - z0) >> 4) + MARGIN);
+            float xa = i * step, xb = xa + step, za = j * step, zb = za + step;
+            // Over real blocks only the band along the loaded area's edge is kept, the rest is fully faded out.
+            if (real && band.alpha(xa, za) == 0 && band.alpha(xa, zb) == 0 && band.alpha(xb, za) == 0 && band.alpha(xb, zb) == 0) {
+                if (holes) continue;
+                real = false;
+            }
             // With shaders, loaded chunks show their real blocks; the distant view leaves a hole for them.
-            if (hidden != 0 && (hidden >>> (((wx - x0) >> 4) * 8 + ((wz - z0) >> 4)) & 1) != 0) continue;
-            if (count[0] + 24 > colors.length) { positions = Arrays.copyOf(positions, positions.length * 2); colors = Arrays.copyOf(colors, colors.length * 2); }
+            List<Builder> into = !real ? List.of(main) : holes ? List.of(band) : List.of(main, band);
             int index = (i + 1) * (n + 2) + (j + 1), h = height[index];
             if (h < 0) {
                 // Shallow water around the islands, lighter where the sea bed rises.
                 int bed = l.height(wx + step / 2, wz + step / 2);
                 if (bed <= 46) continue;
                 int c = bed >= 58 ? mix(LAGOON, SHALLOW, (bed - 58) / 6.0) : mix(OCEAN, LAGOON, (bed - 46) / 12.0);
-                float y = IslandLayout.SEA_LEVEL + .88f, xa = i * step, xb = xa + step, za = j * step, zb = za + step;
-                quad(positions, colors, count, c, xa, y, za, xa, y, zb, xb, y, zb, xb, y, za);
+                float y = IslandLayout.SEA_LEVEL + .88f;
+                for (Builder b : into) b.quad(c, xa, y, za, xa, y, zb, xb, y, zb, xb, y, za);
                 continue;
             }
             // Hollows between higher neighbours are a little darker, as with ambient occlusion.
             int higher = 0;
             for (int di = -1; di <= 1; di++) for (int dj = -1; dj <= 1; dj++) if ((di != 0 || dj != 0) && height[index + di * (n + 2) + dj] > h) higher++;
             int c = shade(color[index], 1 - higher * .035);
-            float xa = i * step, xb = xa + step, za = j * step, zb = za + step, top = h + 1;
-            quad(positions, colors, count, c, xa, top, za, xa, top, zb, xb, top, zb, xb, top, za);
-            // Sides down to lower neighbours (or the sea), shaded like terrain lit from above.
-            int west = height[index - (n + 2)], east = height[index + (n + 2)], north = height[index - 1], south = height[index + 1];
+            float top = h + 1;
+            // Sides down to lower neighbours (or the sea), shaded like terrain lit from above. On the region's border
+            // they go down to the sea as skirts: a neighbour meshed with other columns can never leave a crack.
+            int west = i == 0 ? -1 : height[index - (n + 2)], east = i == n - 1 ? -1 : height[index + (n + 2)];
+            int north = j == 0 ? -1 : height[index - 1], south = j == n - 1 ? -1 : height[index + 1];
             float bw = Math.max(west, IslandLayout.SEA_LEVEL - 1) + 1, be = Math.max(east, IslandLayout.SEA_LEVEL - 1) + 1;
             float bn = Math.max(north, IslandLayout.SEA_LEVEL - 1) + 1, bs = Math.max(south, IslandLayout.SEA_LEVEL - 1) + 1;
-            if (bw < top) quad(positions, colors, count, c | WEST, xa, bw, za, xa, top, za, xa, top, zb, xa, bw, zb);
-            if (be < top) quad(positions, colors, count, c | EAST, xb, be, za, xb, be, zb, xb, top, zb, xb, top, za);
-            if (bn < top) quad(positions, colors, count, c | NORTH, xa, bn, za, xb, bn, za, xb, top, za, xa, top, za);
-            if (bs < top) quad(positions, colors, count, c | SOUTH, xa, bs, zb, xa, top, zb, xb, top, zb, xb, bs, zb);
+            for (Builder b : into) {
+                b.quad(c, xa, top, za, xa, top, zb, xb, top, zb, xb, top, za);
+                if (bw < top) b.quad(c | WEST, xa, bw, za, xa, top, za, xa, top, zb, xa, bw, zb);
+                if (be < top) b.quad(c | EAST, xb, be, za, xb, be, zb, xb, top, zb, xb, top, za);
+                if (bn < top) b.quad(c | NORTH, xa, bn, za, xb, bn, za, xb, top, za, xa, top, za);
+                if (bs < top) b.quad(c | SOUTH, xa, bs, zb, xa, top, zb, xb, top, zb, xb, bs, zb);
+            }
         }
-        return new Mesh(positions, colors, count[0]);
+        return new Meshes(main.mesh(), band.mesh());
+    }
+    /**
+     * Opacity of the band at a point of the region (local coordinates): opaque on the edge of the real chunks,
+     * fading out to nothing {@link #BAND} blocks inside them, along the distance to the nearest chunk not on screen.
+     */
+    private static Builder.Fade fade(BitSet clear, int x0, int z0) {
+        List<int[]> outside = new ArrayList<>();
+        for (int i = 0; i < FIELD; i++) for (int j = 0; j < FIELD; j++)
+            if (!clear.get(i * FIELD + j)) outside.add(new int[]{(i - MARGIN) * 16, (j - MARGIN) * 16});
+        if (outside.isEmpty()) return (x, z) -> 0;
+        return (x, z) -> {
+            double nearest = BAND * BAND;
+            // Chunks past the margin are at least BAND blocks away: the band is already transparent there.
+            for (int[] o : outside) {
+                double dx = Math.max(0, Math.max(o[0] - x, x - o[0] - 16)), dz = Math.max(0, Math.max(o[1] - z, z - o[1] - 16));
+                nearest = Math.min(nearest, dx * dx + dz * dz);
+            }
+            double t = Math.sqrt(nearest) / BAND;
+            return (int) Math.round(255 * (1 - t * t * (3 - 2 * t)));
+        };
     }
     private static Mesh oceanMesh(IslandLayout l) {
         float half = l.size() / 2f + 3000, y = IslandLayout.SEA_LEVEL + .86f;
-        float[] p = new float[12]; int[] c = new int[4]; int[] count = {0};
-        quad(p, c, count, OCEAN, -half, y, -half, -half, y, half, half, y, half, half, y, -half);
-        return new Mesh(p, c, 4);
+        Builder b = new Builder(4, null);
+        b.quad(OCEAN, -half, y, -half, -half, y, half, half, y, half, half, y, -half);
+        return b.mesh();
     }
-    private static void quad(float[] p, int[] c, int[] count, int color, float... v) {
-        for (int k = 0; k < 4; k++) {
-            int i = count[0]++;
-            p[i * 3] = v[k * 3]; p[i * 3 + 1] = v[k * 3 + 1]; p[i * 3 + 2] = v[k * 3 + 2]; c[i] = color;
+    /** Quads of a mesh, opaque or with an opacity drawn from their position. */
+    private static final class Builder {
+        interface Fade { int alpha(float x, float z); }
+        private final Fade fade;
+        private float[] positions; private int[] colors; private byte[] alphas; private int count;
+        Builder(int vertices, Fade fade) { this.fade = fade; positions = new float[vertices * 3]; colors = new int[vertices]; alphas = new byte[vertices]; }
+        int alpha(float x, float z) { return fade == null ? 255 : fade.alpha(x, z); }
+        void quad(int color, float... v) {
+            if (count + 4 > colors.length) { positions = Arrays.copyOf(positions, positions.length * 2); colors = Arrays.copyOf(colors, colors.length * 2); alphas = Arrays.copyOf(alphas, alphas.length * 2); }
+            for (int k = 0; k < 4; k++) {
+                int i = count++;
+                positions[i * 3] = v[k * 3]; positions[i * 3 + 1] = v[k * 3 + 1]; positions[i * 3 + 2] = v[k * 3 + 2]; colors[i] = color;
+                alphas[i] = (byte) alpha(v[k * 3], v[k * 3 + 2]);
+            }
         }
+        Mesh mesh() { return new Mesh(positions, colors, alphas, count); }
     }
     static int shade(int rgb, double k) {
         return (int) Math.min(255, (rgb >> 16 & 255) * k) << 16 | (int) Math.min(255, (rgb >> 8 & 255) * k) << 8 | (int) Math.min(255, (rgb & 255) * k);

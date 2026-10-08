@@ -63,7 +63,7 @@ good|tobacco|Tabac|Tobacco
 good|cigars|Cigares|Cigars
 
 # Storage and logistics (both worlds)
-building|trading_post|Comptoir côtier|Coastal trading post|11x9|coastal cost=coins:500 storage=60
+building|trading_post|Comptoir côtier|Coastal trading post|11x13|coastal cost=coins:500 storage=60
 building|warehouse|Entrepôt|Warehouse|11x9|cost=coins:200,timber:4 upkeep=5 storage=60
 building|market|Marché|Marketplace|9x9|cost=coins:200,timber:4 upkeep=10 service=market:40
 building|shipyard|Chantier naval|Shipyard|11x9|coastal shipyard cost=coins:1000,timber:10 upkeep=20

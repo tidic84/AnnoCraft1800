@@ -136,12 +136,12 @@ public final class FoundationGameTests {
         // Harbour buildings straddle the shore: front row on the beach, back row over the sea.
         for (int angle = 0; angle < 360 && found == null; angle += 3) for (double r = .82; r <= .95 && found == null; r += .02) {
             double a = Math.toRadians(angle), coast = 1 + .07 * Math.sin(a * 3 + island.phase()) + .04 * Math.cos(a * 5 - island.phase());
-            int x = (int)Math.round(island.x() + Math.cos(a) * island.radiusX() * r * coast) - 5;
-            int z = (int)Math.round(island.z() + Math.sin(a) * island.radiusZ() * r * coast) - 5;
-            int rotation = fr.annocraft.building.Siting.coastRotation(layout, post, x, z, 0);
-            if (rotation < 0) continue;
-            BlockPos at = new BlockPos(x, 99, z); load(l, at, 1);
-            if (BuildingService.place(p, AnnoCraft.id("trading_post"), at, rotation).success()) { found = at; turn = rotation; }
+            int x = (int)Math.round(island.x() + Math.cos(a) * island.radiusX() * r * coast);
+            int z = (int)Math.round(island.z() + Math.sin(a) * island.radiusZ() * r * coast);
+            int[] site = fr.annocraft.building.Siting.snap(layout, post, x, z, 0, 6);
+            if (site == null) continue;
+            BlockPos at = new BlockPos(site[0], 99, site[1]); load(l, at, 1);
+            if (BuildingService.place(p, AnnoCraft.id("trading_post"), at, site[2]).success()) { found = at; turn = site[2]; }
         }
         h.assertTrue(found != null, "No valid coastal trading post placement");
         int deck = fr.annocraft.building.Siting.deck(layout, post, found.getX(), found.getZ(), turn);

@@ -171,7 +171,9 @@ public final class RtsController {
      */
     @SubscribeEvent public static void fog(ViewportEvent.RenderFog event) {
         if (!active || event.getType() != net.minecraft.world.level.material.FogType.NONE) return;
-        float far = event.getMode() == FogRenderer.FogMode.FOG_TERRAIN ? 1_000_000 : Math.max(event.getFarPlaneDistance(), renderZoom * 3.2f);
+        // The sky's blend follows the player's render distance, not the far plane the distant view pushes out (LodRenderer.farPlane).
+        float sky = Math.min(event.getFarPlaneDistance(), Minecraft.getInstance().options.getEffectiveRenderDistance() * 16);
+        float far = event.getMode() == FogRenderer.FogMode.FOG_TERRAIN ? 1_000_000 : Math.max(sky, renderZoom * 3.2f);
         event.setFarPlaneDistance(far); event.setNearPlaneDistance(far * .75f); event.setCanceled(true);
     }
     /** Middle mouse drag turns the camera (sideways) and tilts it towards the horizon (up and down), as in Anno. */
@@ -186,6 +188,8 @@ public final class RtsController {
     }
     @SubscribeEvent public static void hand(RenderHandEvent event) { if (active) event.setCanceled(true); }
     private static boolean brandAsked;
+    /** Last coastal snap {x, z, rotation}, kept while the cursor stays on the same block. */
+    private static long snapKey = Long.MIN_VALUE; private static int[] snapSite;
     @SubscribeEvent public static void logout(ClientPlayerNetworkEvent.LoggingOut event) { if (active) exit(); ClientState.clear(); brandAsked = false; }
     public static void pick(double mouseX, double mouseY, int width, int height) {
         if (forcedHover != null) { hover = forcedHover; hoverValid = placement != null && previewValid(hover, placement); return; }
@@ -224,10 +228,13 @@ public final class RtsController {
         if (roadMode != 0) { hover = ground; hoverValid = true; return; }
         if (placement == null) { hover = ground; return; }
         if (placement.coastal() && ClientState.layout != null) {
-            // Harbour buildings turn to face the sea by themselves and sit at the height of the beach.
-            int turn = fr.annocraft.building.Siting.coastRotation(ClientState.layout, placement, ground.getX(), ground.getZ(), rotation);
-            if (turn >= 0) rotation = turn;
-            hover = new BlockPos(ground.getX(), fr.annocraft.building.Siting.deck(ClientState.layout, placement, ground.getX(), ground.getZ(), rotation) + 1, ground.getZ());
+            // Harbour buildings snap to the coast near the cursor: they turn to face the sea and slide onto the shoreline,
+            // which on a round island's slanting coasts is hard to hit by hand.
+            long key = ((long) ground.getX() << 32 ^ ground.getZ() & 0xffffffffL) * 31 + placement.id().hashCode() * 4L + rotation;
+            if (key != snapKey) { snapKey = key; snapSite = fr.annocraft.building.Siting.snap(ClientState.layout, placement, ground.getX(), ground.getZ(), rotation, 6); }
+            int x = ground.getX() - placement.width(rotation) / 2, z = ground.getZ() - placement.depth(rotation) / 2;
+            if (snapSite != null) { x = snapSite[0]; z = snapSite[1]; rotation = snapSite[2]; }
+            hover = new BlockPos(x, fr.annocraft.building.Siting.deck(ClientState.layout, placement, x, z, rotation) + 1, z);
         } else hover = ground.above();
         hoverValid = previewValid(hover, placement);
     }
@@ -415,16 +422,29 @@ public final class RtsController {
     private static void grid(PoseStack pose, VertexConsumer lines, int cx, int cz) {
         if (ClientState.layout == null) return;
         int radius = 14; var m = pose.last().pose(); var n = pose.last().normal();
+        // Tiles under existing buildings stay bare, so the player sees where nothing can go.
+        int size = radius * 2 + 3, x0 = cx - radius - 1, z0 = cz - radius - 1;
+        boolean[] taken = new boolean[size * size];
+        for (BuildingInstance b : ClientState.visible()) {
+            int bx = b.origin().getX(), bz = b.origin().getZ();
+            for (int x = Math.max(bx, x0); x < Math.min(bx + b.width(), x0 + size); x++)
+                for (int z = Math.max(bz, z0); z < Math.min(bz + b.depth(), z0 + size); z++) taken[(x - x0) * size + z - z0] = true;
+        }
         for (int x = cx - radius; x <= cx + radius; x++) for (int z = cz - radius; z <= cz + radius; z++) {
             double distance = Math.hypot(x + .5 - cx, z + .5 - cz); if (distance > radius) continue;
             float alpha = (float) (.45 * (1 - distance / radius));
-            int h = ClientState.layout.height(x, z); if (h <= 64) continue;
-            float y = h + 1.02f;
-            // Two edges per tile; the neighbours draw the other two.
-            lines.vertex(m, x, y, z).color(1f, 1f, 1f, alpha).normal(n, 1, 0, 0).endVertex();
-            lines.vertex(m, x + 1, y, z).color(1f, 1f, 1f, alpha).normal(n, 1, 0, 0).endVertex();
-            lines.vertex(m, x, y, z).color(1f, 1f, 1f, alpha).normal(n, 0, 0, 1).endVertex();
-            lines.vertex(m, x, y, z + 1).color(1f, 1f, 1f, alpha).normal(n, 0, 0, 1).endVertex();
+            boolean free = !taken[(x - x0) * size + z - z0];
+            // Two edges per tile; the neighbours draw the other two. A taken tile still draws an edge it shares with a free one.
+            int north = free ? ClientState.layout.height(x, z) : taken[(x - x0) * size + z - 1 - z0] ? 0 : ClientState.layout.height(x, z - 1);
+            int west = free ? ClientState.layout.height(x, z) : taken[(x - 1 - x0) * size + z - z0] ? 0 : ClientState.layout.height(x - 1, z);
+            if (north > 64) {
+                lines.vertex(m, x, north + 1.02f, z).color(1f, 1f, 1f, alpha).normal(n, 1, 0, 0).endVertex();
+                lines.vertex(m, x + 1, north + 1.02f, z).color(1f, 1f, 1f, alpha).normal(n, 1, 0, 0).endVertex();
+            }
+            if (west > 64) {
+                lines.vertex(m, x, west + 1.02f, z).color(1f, 1f, 1f, alpha).normal(n, 0, 0, 1).endVertex();
+                lines.vertex(m, x, west + 1.02f, z + 1).color(1f, 1f, 1f, alpha).normal(n, 0, 0, 1).endVertex();
+            }
         }
     }
     /** Deposit sites of the kind a mine needs: gold frames around the slots, with a marker post. */
