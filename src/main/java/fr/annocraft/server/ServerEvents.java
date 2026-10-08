@@ -38,6 +38,7 @@ public final class ServerEvents {
     }
     @SubscribeEvent public static void started(ServerStartedEvent event) {
         ColonyData colony = ColonyData.get(event.getServer());
+        colony.adoptMode(event.getServer().getGameRules().getBoolean(AnnoCraft.COMPETITIVE));
         for (ResourceKey<Level> key : AnnoCraft.WORLDS) {
             ServerLevel level = event.getServer().getLevel(key);
             if (level == null || !(level.getChunkSource().getGenerator() instanceof ArchipelagoGenerator))
@@ -68,20 +69,22 @@ public final class ServerEvents {
                 .then(Commands.literal("join").executes(ctx -> { join(ctx.getSource().getPlayerOrException(), AnnoCraft.ARCHIPELAGO); return 1; })
                         .then(Commands.literal("new_world").executes(ctx -> {
                             ServerPlayer p = ctx.getSource().getPlayerOrException();
-                            if (!ColonyData.get(p.server).newWorldOpen()) { ctx.getSource().sendFailure(Component.translatable("message.annocraft1800.new_world_locked")); return 0; }
+                            if (!ColonyData.get(p.server).colony(p).newWorldOpen()) { ctx.getSource().sendFailure(Component.translatable("message.annocraft1800.new_world_locked")); return 0; }
                             join(p, AnnoCraft.NEW_WORLD); return 1;
                         })))
                 .then(Commands.literal("leave").executes(ctx -> { leave(ctx.getSource().getPlayerOrException()); return 1; }))
                 .then(Commands.literal("status").executes(ctx -> {
                     ColonyData data = ColonyData.get(ctx.getSource().getServer());
-                    var e = data.economy();
+                    var colony = ctx.getSource().getPlayer() == null ? data.colony(ColonyData.COLONY) : data.colony(ctx.getSource().getPlayer());
+                    var e = colony.economy();
                     ctx.getSource().sendSuccess(() -> Component.literal("AnnoCraft: " + data.buildings().size() + " buildings, " + data.roads().size() + " roads, "
-                            + data.maritime().ships().size() + " ships, " + e.totalPopulation() + " residents, revision " + data.revision()
+                            + colony.maritime().fleet().size() + " ships, " + e.totalPopulation() + " residents, revision " + data.revision()
                             + ", camera tickets " + CameraSessions.ticketCount() + ", coins " + (long) e.coins() + " (" + Math.round(e.incomePerMinute() - e.upkeepPerMinute()) + "/min)"
                             + (e.sandbox() ? ", sandbox" : "")), false); return 1;
                 }))
                 .then(Commands.literal("campaign").then(Commands.literal("start").executes(ctx -> {
-                    ColonyData.get(ctx.getSource().getServer()).startCampaign(); return 1;
+                    ColonyData data = ColonyData.get(ctx.getSource().getServer());
+                    data.startCampaign(ctx.getSource().getPlayer() == null ? data.colony(ColonyData.COLONY) : data.colony(ctx.getSource().getPlayer())); return 1;
                 })))
                 .then(Commands.literal("sandbox").requires(source -> source.hasPermission(2))
                         .then(Commands.argument("enabled", BoolArgumentType.bool()).executes(ctx -> {
@@ -99,9 +102,10 @@ public final class ServerEvents {
         if (server.getTickCount() % 20 != 0 || server.getLevel(AnnoCraft.ARCHIPELAGO) == null) return;
         ColonyData data = ColonyData.get(server);
         data.tickEconomy(1);
-        for (Colony.Event e : data.drainEvents()) broadcast(server, e);
+        for (var e : data.drainEvents()) broadcast(server, data, e.getKey(), e.getValue());
         if (server.getTickCount() % 40 == 0) AnnoNetwork.syncEconomy(server);
         if (server.getTickCount() % 100 == 0) WorldLife.tick(server);
+        if (server.getTickCount() % 200 == 0) Nature.tick(server, data);
     }
     public static Component render(Colony.Event e) {
         Object[] args = e.args().stream().map(a -> a.startsWith("#") ? Component.translatable(a.substring(1)) : (Object) Component.literal(islandName(a))).toArray();
@@ -112,11 +116,14 @@ public final class ServerEvents {
         if (id.startsWith("nw_island_")) return "NM " + id.substring(10);
         return id.startsWith("island_") ? id.substring(7) : id;
     }
-    private static void broadcast(MinecraftServer server, Colony.Event e) {
+    /** News for a company's players: everyone in a cooperative game, or for the factions' moves. */
+    private static void broadcast(MinecraftServer server, ColonyData data, String company, Colony.Event e) {
         Component message = render(e);
         // The HUD feed shows every event; missions are also kept in the chat history.
         boolean chat = e.key().contains("mission") || e.key().contains("campaign");
         for (ServerPlayer p : server.getPlayerList().getPlayers()) if (AnnoCraft.isColony(p.level().dimension())) {
+            var member = data.members().get(p.getUUID());
+            if (!ColonyData.COLONY.equals(company) && (member == null || !member.company().equals(company))) continue;
             AnnoNetwork.notice(p, e);
             if (chat) p.sendSystemMessage(message);
         }
@@ -140,6 +147,7 @@ public final class ServerEvents {
         IslandLayout.Island first = BuildingService.generator(level).layout().islands().get(0);
         player.setGameMode(GameType.ADVENTURE);
         player.teleportTo(level, first.x() + .5, 74, first.z() + .5, 0, 0);
+        ColonyData.get(player.server).enroll(player.getUUID(), player.getGameProfile().getName());
         AnnoNetwork.sync(player);
         AnnoNetwork.notice(player, Colony.Event.of(true, "message.annocraft1800.welcome", "#world.annocraft1800." + AnnoCraft.worldName(world)));
     }
@@ -157,7 +165,8 @@ public final class ServerEvents {
         p.getPersistentData().remove("annocraft_return");
     }
     @SubscribeEvent public static void login(PlayerEvent.PlayerLoggedInEvent event) {
-        if (event.getEntity() instanceof ServerPlayer p && AnnoCraft.isColony(p.level().dimension())) { p.setGameMode(GameType.ADVENTURE); AnnoNetwork.sync(p); }
+        if (event.getEntity() instanceof ServerPlayer p) CameraSessions.recover(p);
+        if (event.getEntity() instanceof ServerPlayer p && AnnoCraft.isColony(p.level().dimension())) { p.setGameMode(GameType.ADVENTURE); ColonyData.get(p.server).enroll(p.getUUID(), p.getGameProfile().getName()); AnnoNetwork.sync(p); }
     }
     @SubscribeEvent public static void logout(PlayerEvent.PlayerLoggedOutEvent event) {
         if (event.getEntity() instanceof ServerPlayer p) { CameraSessions.close(p); LAST_COMMAND.remove(p.getUUID()); LAST_SYNC.remove(p.getUUID()); }

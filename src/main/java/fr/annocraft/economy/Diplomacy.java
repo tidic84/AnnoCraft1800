@@ -34,19 +34,36 @@ public final class Diplomacy {
         public boolean eliminated;
     }
     private final Map<String, Faction> factions = new LinkedHashMap<>();
-    /** Island id to owner: a faction id or {@link #PLAYER}. Unlisted islands are free to settle. */
-    private final Map<String, String> owners = new TreeMap<>();
-    /** Remaining garrison of faction islands, 0..1 of their maximum. */
-    private final Map<String, Double> garrison = new TreeMap<>();
+    /**
+     * Who holds which island, shared by every company of the archipelago: island id to owner (a faction or a
+     * company id), and the remaining garrison of faction islands, 0..1 of their maximum.
+     */
+    public static final class Territory {
+        public final Map<String, String> owners = new TreeMap<>();
+        public final Map<String, Double> garrison = new TreeMap<>();
+    }
+    private final Territory territory;
+    /** Island id to owner: a faction id or a company id ({@link #PLAYER} in a cooperative game). Unlisted islands are free to settle. */
+    private final Map<String, String> owners;
+    private final Map<String, Double> garrison;
+    /** The company whose relations these are, and whether it also runs the factions' colonisation and garrisons. */
+    private final String self;
+    private final boolean steward;
     private int victories, conquests;
     private Random random = new Random();
 
-    public Diplomacy() {
+    public Diplomacy() { this(new Territory(), PLAYER, true); }
+    public Diplomacy(Territory territory, String self, boolean steward) {
+        this.territory = territory; this.owners = territory.owners; this.garrison = territory.garrison; this.self = self; this.steward = steward;
         for (FactionType t : FACTIONS) {
             Faction f = new Faction(); f.relation = t.baseRelation(); f.stance = t.pirate() ? Stance.WAR : Stance.PEACE; factions.put(t.id(), f);
         }
     }
     public void setRandom(Random random) { this.random = random; }
+    public String self() { return self; }
+    public Territory territory() { return territory; }
+    /** Whether an island owner is this company. */
+    public boolean mine(String owner) { return self.equals(owner); }
     public static FactionType type(String id) { return FACTIONS.stream().filter(t -> t.id().equals(id)).findFirst().orElse(null); }
     public Faction faction(String id) { return factions.get(id); }
     public Map<String, String> owners() { return Collections.unmodifiableMap(owners); }
@@ -59,8 +76,8 @@ public final class Diplomacy {
         for (FactionType t : FACTIONS) for (String island : t.homes())
             if (geo.exists(island) && !owners.containsKey(island)) { owners.put(island, t.id()); garrison.put(island, 1.0); }
     }
-    public void claim(String island) { owners.putIfAbsent(island, PLAYER); }
-    public boolean playerMayBuild(String island) { String o = owners.get(island); return o == null || PLAYER.equals(o); }
+    public void claim(String island) { owners.putIfAbsent(island, self); }
+    public boolean playerMayBuild(String island) { String o = owners.get(island); return o == null || self.equals(o); }
     public boolean hostile(String faction) { Faction f = factions.get(faction); return f != null && !f.eliminated && f.stance == Stance.WAR; }
     public List<String> factionIslands(String faction) { return owners.entrySet().stream().filter(e -> e.getValue().equals(faction)).map(Map.Entry::getKey).toList(); }
     public double garrison(String island) { return garrison.getOrDefault(island, 0.0); }
@@ -132,10 +149,10 @@ public final class Diplomacy {
                 f.stance = Stance.WAR; colony.event(Colony.Event.of(false, "event.annocraft1800.war_declared", "#faction.annocraft1800." + t.id()));
             }
             if (f.stance == Stance.WAR && random.nextDouble() < dt / 900) raid(colony, t);
-            if (!t.pirate() && !colony.economy().sandbox() && random.nextDouble() < dt / 1500) expand(colony, t);
+            if (steward && !t.pirate() && !colony.economy().sandbox() && random.nextDouble() < dt / 1500) expand(colony, t);
         }
-        // Garrisons recover when nobody besieges them.
-        garrison.replaceAll((island, g) -> Math.min(1, g + dt / 600));
+        // Garrisons recover when nobody besieges them (once per archipelago, however many companies).
+        if (steward) garrison.replaceAll((island, g) -> Math.min(1, g + dt / 600));
     }
     /** Rivals settle free islands of the worlds they already hold, three islands at most: the archipelago is contested. */
     private void expand(Colony colony, FactionType t) {
@@ -167,12 +184,12 @@ public final class Diplomacy {
     /** Warships besieging a faction island. @return true when the island falls. */
     public boolean siege(Colony colony, String island, int attack, double dt) {
         String owner = owners.get(island);
-        if (owner == null || PLAYER.equals(owner) || !hostile(owner) || attack <= 0) return false;
+        if (owner == null || type(owner) == null || !hostile(owner) || attack <= 0) return false;
         double g = garrison.getOrDefault(island, 1.0) - attack * dt / garrisonStrength(owner) / 10;
         // Undo this step's regeneration so a siege never stalls on recovery.
         garrison.put(island, Math.max(0, g - dt / 600));
         if (g > 0) return false;
-        owners.put(island, PLAYER); garrison.remove(island); conquests++;
+        owners.put(island, self); garrison.remove(island); conquests++;
         Faction f = factions.get(owner); f.relation = Math.max(-100, f.relation - 40);
         colony.economy().addCoins(1500 * type(owner).level());
         colony.event(Colony.Event.of(true, "event.annocraft1800.conquered", island, "#faction.annocraft1800." + owner));
@@ -201,8 +218,10 @@ public final class Diplomacy {
         t.putInt("victories", victories); t.putInt("conquests", conquests);
         return t;
     }
-    public static Diplomacy load(CompoundTag t) {
-        Diplomacy d = new Diplomacy();
+    public static Diplomacy load(CompoundTag t) { return load(t, null, PLAYER, true); }
+    /** A company's relations; with a shared territory, the save's owners and garrisons are not read. */
+    public static Diplomacy load(CompoundTag t, Territory shared, String self, boolean steward) {
+        Diplomacy d = shared == null ? new Diplomacy() : new Diplomacy(shared, self, steward);
         CompoundTag fs = t.getCompound("factions");
         for (String id : fs.getAllKeys()) {
             Faction f = d.factions.get(id); if (f == null) continue;
@@ -210,8 +229,10 @@ public final class Diplomacy {
             f.relation = c.getDouble("relation"); f.timer = c.getDouble("timer"); f.eliminated = c.getBoolean("eliminated");
             try { f.stance = Stance.valueOf(c.getString("stance")); } catch (IllegalArgumentException ignored) { }
         }
-        CompoundTag o = t.getCompound("owners"); for (String island : o.getAllKeys()) d.owners.put(island, o.getString(island));
-        CompoundTag g = t.getCompound("garrison"); for (String island : g.getAllKeys()) d.garrison.put(island, g.getDouble(island));
+        if (shared == null) {
+            CompoundTag o = t.getCompound("owners"); for (String island : o.getAllKeys()) d.owners.put(island, o.getString(island));
+            CompoundTag g = t.getCompound("garrison"); for (String island : g.getAllKeys()) d.garrison.put(island, g.getDouble(island));
+        }
         d.victories = t.getInt("victories"); d.conquests = t.getInt("conquests");
         return d;
     }

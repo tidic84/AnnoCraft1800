@@ -1,7 +1,7 @@
 {
   "name": "building.annocraft1800.clay_pit",
   "structure": "annocraft1800:clay_pit",
-  "width": 7, "height": 4, "depth": 7,
+  "width": 7, "height": 6, "depth": 7,
   "coastal": false, "level": 1,
   "economy": {
     "cost": {"coins": 300, "timber": 4},

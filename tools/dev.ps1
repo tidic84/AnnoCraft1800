@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('build', 'test', 'client', 'server', 'gametest')]
+    [ValidateSet('build', 'test', 'client', 'shaders', 'server', 'gametest')]
     [string]$Task = 'build'
 )
 $ErrorActionPreference = 'Stop'
@@ -12,12 +12,14 @@ if ($env:JAVA_HOME) { $env:PATH = (Join-Path $env:JAVA_HOME 'bin') + ';' + $env:
 if (-not (Get-Command java -ErrorAction SilentlyContinue)) { throw 'Java 17 requis : définir JAVA_HOME vers un JDK 17.' }
 $gradleTask = switch ($Task) {
     'client' { 'runClient' }
+    'shaders' { 'runClient' }
     'server' { 'runServer' }
     'gametest' { 'runGameTestServer' }
     default { $Task }
 }
 Push-Location -LiteralPath $projectRoot
 try {
-    & (Join-Path $projectRoot 'gradlew.bat') $gradleTask '--console=plain'
+    $extra = if ($Task -eq 'shaders') { @('-Pshaders') } else { @() }
+    & (Join-Path $projectRoot 'gradlew.bat') $gradleTask @extra '--console=plain'
     exit $LASTEXITCODE
 } finally { Pop-Location }

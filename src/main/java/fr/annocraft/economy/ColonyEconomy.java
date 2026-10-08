@@ -13,13 +13,15 @@ public final class ColonyEconomy {
     public static final List<String> TIERS = List.of("farmers", "workers", "artisans", "engineers", "investors", "laborers", "overseers");
     /** Residents gained or lost per second while moving toward the target population. */
     public static final double GROWTH_PER_SECOND = .2;
-    public enum Status { OK, NO_ROAD, NO_WORKFORCE, NO_INPUT, STORAGE_FULL, NEEDS_UNMET }
+    public enum Status { OK, NO_ROAD, NO_WORKFORCE, NO_INPUT, STORAGE_FULL, NEEDS_UNMET, NO_FOREST }
     public record Site(UUID id, String island, int x, int z, int width, int depth, EconomyProfile profile) {
         double centerX() { return x + width / 2.0; }
         double centerZ() { return z + depth / 2.0; }
     }
     public static final class SiteState {
         public double residents, progress, productivity, supply = 1, luxury, boost;
+        /** Share of the natural surroundings a producer needs (the forest of a lumberjack), 1 when complete. */
+        public double nature = 1;
         public boolean connected;
         public Status status = Status.OK;
     }
@@ -53,6 +55,7 @@ public final class ColonyEconomy {
     public Set<String> stockedIslands() { return Collections.unmodifiableSet(stock.keySet()); }
     public int capacity(String island) { return capacity.getOrDefault(island, 0); }
     public SiteState state(UUID id) { return states.get(id); }
+    public void setNature(UUID id, double share) { SiteState s = states.get(id); if (s != null) s.nature = Math.max(0, Math.min(1, share)); }
     public int[] workforce(String island, String tier) { return workforce.getOrDefault(island, Map.of()).getOrDefault(tier, new int[2]); }
     public double rate(String island, String good) { return rates.getOrDefault(island, Map.of()).getOrDefault(good, 0.0); }
     public int population(String tier) { return population.getOrDefault(tier, 0); }
@@ -151,9 +154,10 @@ public final class ColonyEconomy {
         int[] w = p.workforce() > 0 ? workforce(site.island(), p.workTier()) : null;
         double ratio = w == null ? 1 : w[1] == 0 ? 0 : Math.min(1, (double) w[0] / w[1]);
         if (ratio <= 0) { s.productivity = 0; s.status = Status.NO_WORKFORCE; return; }
-        s.productivity = ratio * (1 + s.boost);
+        s.productivity = ratio * (1 + s.boost) * s.nature;
+        if (s.productivity <= 0) { s.status = Status.NO_FOREST; return; }
         s.progress = Math.min(1, s.progress + dt * s.productivity / p.cycle());
-        s.status = ratio < 1 ? Status.NO_WORKFORCE : Status.OK;
+        s.status = ratio < 1 ? Status.NO_WORKFORCE : s.nature < .5 ? Status.NO_FOREST : Status.OK;
         if (s.progress < 1) return;
         for (var in : p.inputs().entrySet()) if (stock(site.island(), in.getKey()) + 1e-9 < in.getValue()) { s.status = Status.NO_INPUT; return; }
         int cap = capacity(site.island());
@@ -267,6 +271,8 @@ public final class ColonyEconomy {
         CompoundTag t = new CompoundTag();
         t.putDouble("coins", coins); t.putBoolean("sandbox", sandbox);
         ListTag cargo = new ListTag(); cargoWorlds.forEach(w -> cargo.add(StringTag.valueOf(w))); t.put("cargo_worlds", cargo);
+        // Saves without a home island get the same deterministic one the loader would infer.
+        if (homeIsland == null && !stock.isEmpty()) homeIsland = new TreeSet<>(stock.keySet()).first();
         if (homeIsland != null) t.putString("home", homeIsland);
         CompoundTag islands = new CompoundTag();
         stock.forEach((island, goods) -> { CompoundTag g = new CompoundTag(); goods.forEach(g::putDouble); islands.put(island, g); });
@@ -293,7 +299,7 @@ public final class ColonyEconomy {
             CompoundTag g = islands.getCompound(island);
             for (String good : g.getAllKeys()) e.addStock(island, good, g.getDouble(good));
         }
-        if (e.homeIsland == null && !e.stock.isEmpty()) e.homeIsland = e.stock.keySet().iterator().next();
+        if (e.homeIsland == null && !e.stock.isEmpty()) e.homeIsland = new TreeSet<>(e.stock.keySet()).first();
         for (Tag entry : t.getList("sites", Tag.TAG_COMPOUND)) {
             CompoundTag s = (CompoundTag) entry; SiteState state = new SiteState();
             state.residents = s.getDouble("residents"); state.progress = s.getDouble("progress");

@@ -24,6 +24,8 @@ public final class ClientState {
     public static boolean messageSuccess;
     public static boolean networkTestReady;
     private static long revision = -1;
+    /** Revision of the last snapshot: changes when buildings are placed, upgraded or demolished. */
+    public static long revision() { return revision; }
     public static UUID selected;
     public static void receive(CompoundTag tag) {
         if (tag == null || tag.getInt("version") != fr.annocraft.server.ColonyData.VERSION || tag.getLong("revision") < revision) return;
@@ -75,6 +77,36 @@ public final class ClientState {
     public static List<String> ports() {
         List<String> result = new ArrayList<>(); economy.getList("ports", Tag.TAG_STRING).forEach(t -> result.add(t.getAsString())); return result;
     }
+    /** Companies and players of the snapshot. */
+    public static fr.annocraft.economy.Company company(String id) {
+        for (Tag t : economy.getCompound("companies").getList("companies", Tag.TAG_COMPOUND)) if (((CompoundTag) t).getString("id").equals(id)) return fr.annocraft.economy.Company.load((CompoundTag) t);
+        return null;
+    }
+    public static List<fr.annocraft.economy.Company.Member> members() {
+        List<fr.annocraft.economy.Company.Member> list = new ArrayList<>();
+        for (Tag t : economy.getCompound("companies").getList("members", Tag.TAG_COMPOUND)) list.add(fr.annocraft.economy.Company.Member.load((CompoundTag) t));
+        return list;
+    }
+    public static fr.annocraft.economy.Company.Member me() {
+        Minecraft mc = Minecraft.getInstance(); if (mc.player == null) return null;
+        return members().stream().filter(m -> m.player().equals(mc.player.getUUID())).findFirst().orElse(null);
+    }
+    /** The player's own company: its look on the map, the sails and the interface. */
+    public static fr.annocraft.economy.Company myCompany() { return company(myCompanyId()); }
+    /** The company this player manages (the shared colony in a cooperative game). */
+    public static String myCompanyId() { String c = economy.getString("company"); return c.isEmpty() ? fr.annocraft.economy.Diplomacy.PLAYER : c; }
+    /** Whether an island owner (or a ship's) is this player's company. */
+    public static boolean mine(String owner) { return owner != null && owner.equals(myCompanyId()); }
+    /** Whether an owner is a company (a player's) rather than a faction. */
+    public static boolean isCompany(String owner) { return owner != null && !owner.isEmpty() && fr.annocraft.economy.Diplomacy.type(owner) == null; }
+    /** Display name of an owner: a company's chosen name or a faction's. */
+    public static Component ownerName(String owner) {
+        if (isCompany(owner)) { var c = company(owner); return Component.literal(c == null ? owner : c.name()); }
+        return Component.translatable("faction.annocraft1800." + owner);
+    }
+    public static boolean competitive() { return economy.getBoolean("competitive"); }
+    public static int myColor() { var c = myCompany(); return c == null ? 0x2f6fd0 : c.color(); }
+    public static int colorOf(String company) { var c = company(company); return c == null ? 0x2f6fd0 : c.color(); }
     public static String owner(String island) { return economy.getCompound("diplomacy").getCompound("owners").getString(island); }
     public static void feedback(boolean success, String key) {
         message = key; messageSuccess = success;

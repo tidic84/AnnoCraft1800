@@ -1,7 +1,7 @@
 {
   "name": "building.annocraft1800.champagne_cellar",
   "structure": "annocraft1800:champagne_cellar",
-  "width": 9, "height": 8, "depth": 7,
+  "width": 9, "height": 11, "depth": 7,
   "coastal": false, "level": 1,
   "economy": {
     "cost": {"coins": 5000, "steel_beams": 6, "windows": 4},

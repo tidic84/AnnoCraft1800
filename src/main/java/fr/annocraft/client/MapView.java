@@ -23,7 +23,8 @@ public final class MapView {
     private MapView() { }
     static int ownerColor(String owner) {
         if (owner == null || owner.isEmpty()) return 0xffd8d0b0;
-        return switch (owner) { case Diplomacy.PLAYER -> 0xff5fa8ff; case "ashby" -> 0xffc070e0; case "dravek" -> 0xffe05050; case "corsairs" -> 0xff303030; default -> 0xffffffff; };
+        if (ClientState.isCompany(owner)) return 0xff000000 | ClientState.colorOf(owner);
+        return switch (owner) { case "ashby" -> 0xffc070e0; case "dravek" -> 0xffe05050; case "corsairs" -> 0xff303030; default -> 0xffffffff; };
     }
     /** Map texture of a world, regenerated only when its layout changes. */
     static ResourceLocation texture(String world) {
@@ -78,14 +79,14 @@ public final class MapView {
             double[] p = toMap(layout, b.origin().getX() + b.width() / 2.0, b.origin().getZ() + b.depth() / 2.0, x, y, side);
             g.fill((int) p[0], (int) p[1], (int) p[0] + 1, (int) p[1] + 1, 0xffffffff);
         }
-        Geography geo = ShipRenderer.geography(); int index = 0;
+        Geography geo = ShipRenderer.geography(); Map<String, Integer> moored = new HashMap<>();
         String saved = ClientState.world; ClientState.world = world;
-        for (CompoundTag s : ColonyScreen.ships()) {
-            double[] w = ShipRenderer.position(s, index++);
+        for (CompoundTag s : ShipRenderer.all()) {
+            double[] w = ShipRenderer.position(s, moored);
             if (details && s.getString("order").equals("route")) for (Tag t : s.getList("route", Tag.TAG_COMPOUND)) {
                 String island = ((CompoundTag) t).getString("island");
                 if (!geo.exists(island) || !geo.world(island).equals(world) || w == null) continue;
-                double[] h = geo.harbour(island, null), a = toMap(layout, w[0], w[1], x, y, side), b = toMap(layout, h[0], h[1], x, y, side);
+                double[] h = ShipRenderer.dock(island, 0), a = toMap(layout, w[0], w[1], x, y, side), b = toMap(layout, h[0], h[1], x, y, side);
                 dotted(g, a[0], a[1], b[0], b[1], 0x90e7cf8a);
             }
             if (w == null) continue;
@@ -96,9 +97,14 @@ public final class MapView {
         }
         ClientState.world = saved;
         if (RtsController.active && world.equals(ClientState.world)) {
-            double[] cam = toMap(layout, RtsController.x, RtsController.z, x, y, side);
-            int half = Math.max(2, (int) (RtsController.zoom * 1.6 / layout.size() * side));
-            frame(g, (int) cam[0] - half, (int) cam[1] - half, half * 2, half * 2, 0xffffffff);
+            // The ground the camera sees, as the view cone on Anno's minimap.
+            var quad = CameraMath.footprint(RtsController.x, RtsController.z, RtsController.yaw, RtsController.zoom, RtsController.tilt, 16 / 9.0, LodRenderer.reach(RtsController.zoom, layout.size()));
+            g.enableScissor(x, y, x + side, y + side);
+            for (int i = 0; i < quad.size(); i++) {
+                double[] a = toMap(layout, quad.get(i)[0], quad.get(i)[1], x, y, side), b = toMap(layout, quad.get((i + 1) % 4)[0], quad.get((i + 1) % 4)[1], x, y, side);
+                dotted(g, a[0], a[1], b[0], b[1], 0xffffffff);
+            }
+            g.disableScissor();
         }
     }
     static void frame(GuiGraphics g, int x, int y, int w, int h, int color) {

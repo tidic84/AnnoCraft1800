@@ -1,7 +1,7 @@
 {
   "name": "building.annocraft1800.knitter",
   "structure": "annocraft1800:knitter",
-  "width": 7, "height": 7, "depth": 7,
+  "width": 7, "height": 12, "depth": 7,
   "coastal": false, "level": 1,
   "economy": {
     "cost": {"coins": 200, "timber": 2},

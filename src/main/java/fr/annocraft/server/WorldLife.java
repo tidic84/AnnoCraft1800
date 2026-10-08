@@ -23,7 +23,7 @@ public final class WorldLife {
     public static final String CITIZEN = "annocraft_citizen";
     private static final Random RANDOM = new Random();
     private WorldLife() { }
-    public static boolean citizen(Entity e) { return e.getTags().contains(CITIZEN); }
+    public static boolean citizen(Entity e) { return e != null && e.getTags().contains(CITIZEN); }
 
     public static void tick(MinecraftServer server) {
         ColonyData data = ColonyData.get(server);
@@ -49,8 +49,10 @@ public final class WorldLife {
         return result;
     }
     private static void cleanup(ServerLevel level, ColonyData data, String world, List<double[]> focus) {
-        for (Entity e : level.getAllEntities()) {
-            if (!citizen(e)) continue;
+        // Copy first: discarding while iterating the live entity lookup can yield null entries.
+        List<Entity> citizens = new ArrayList<>();
+        for (Entity e : level.getAllEntities()) if (citizen(e)) citizens.add(e);
+        for (Entity e : citizens) {
             boolean watched = focus.stream().anyMatch(f -> Math.abs(f[0] - e.getX()) < 96 && Math.abs(f[1] - e.getZ()) < 96);
             if (!watched || homes(data, world, e.getX(), e.getZ(), 48).isEmpty()) e.discard();
         }
@@ -59,7 +61,7 @@ public final class WorldLife {
         List<BuildingInstance> homes = homes(data, world, f[0], f[1], 64);
         if (homes.isEmpty()) return;
         double residents = 0;
-        for (BuildingInstance h : homes) { var s = data.economy().state(h.id()); if (s != null) residents += s.residents; }
+        for (BuildingInstance h : homes) { var s = data.colonyOf(h).economy().state(h.id()); if (s != null) residents += s.residents; }
         int target = (int) Math.min(24, residents / 6), present = level.getEntitiesOfClass(Villager.class,
                 new AABB(f[0] - 64, 0, f[1] - 64, f[0] + 64, 256, f[1] + 64), WorldLife::citizen).size();
         for (int i = 0; i < Math.min(3, target - present); i++) {
@@ -102,7 +104,8 @@ public final class WorldLife {
         IslandLayout layout = BuildingService.generator(level).layout();
         for (var entry : data.diplomacy().owners().entrySet()) {
             String island = entry.getKey(), owner = entry.getValue();
-            boolean conquered = Diplomacy.PLAYER.equals(owner);
+            // An island taken by a company (not a faction) loses its rival town.
+            boolean conquered = Diplomacy.type(owner) == null;
             if (!ColonyEconomy.worldOf(island).equals(world)) continue;
             if (conquered ? !"built".equals(data.decoration(island)) : data.decorated(island)) continue;
             var isle = layout.island(island).orElse(null); if (isle == null) continue;

@@ -1,0 +1,10 @@
+{
+  "variants": {
+    "": [
+      {"model": "annocraft1800:block/packed_earth"},
+      {"model": "annocraft1800:block/packed_earth", "y": 90},
+      {"model": "annocraft1800:block/packed_earth", "y": 180},
+      {"model": "annocraft1800:block/packed_earth", "y": 270}
+    ]
+  }
+}

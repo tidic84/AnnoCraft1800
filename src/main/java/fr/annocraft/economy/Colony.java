@@ -14,6 +14,21 @@ public interface Colony {
     /** Attack strength of defensive buildings on a player island. */
     int defense(String island);
     void event(Event event);
+    /** Other companies' ships on the same sea (competitive games), whose company they belong to, and whether we are at war with it. */
+    default Collection<Maritime.Ship> foreignShips() { return List.of(); }
+    default String companyOf(Maritime.Ship ship) { return null; }
+    default boolean atWar(String company) { return false; }
+    /** Another company's ship sunk by ours. */
+    default void sinkForeign(Maritime.Ship ship) { }
+    /** Where ships really are: the sea and the quays of each world. Null in abstract simulations (tests without a sea). */
+    default Navigation navigation() { return null; }
+    interface Navigation {
+        /** Navigable water of a world and half its width (the region's bounds). */
+        SeaRoutes.Water water(String world);
+        int half(String world);
+        /** Mooring {x, z, heading x, heading z, out x, out z} of the n-th ship at an island's harbour. */
+        double[] dock(String island, int slot);
+    }
 
     /**
      * A notification for every player. Arguments starting with '#' are translation keys, others are literal text.

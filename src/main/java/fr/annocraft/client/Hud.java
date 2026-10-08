@@ -57,7 +57,7 @@ public final class Hud {
             else if (!finished) h[0] += 13 * c.getList("objectives", Tag.TAG_COMPOUND).size() + 2;
         }
         UiKit.panel(g, x, y, w, h[0]);
-        UiKit.icon(g, UiKit.item("quest"), x + 3, y + 2, 10);
+        UiKit.icon(g, "quest", x + 3, y + 2, 10);
         UiKit.text(g, title, x + 16, y + 3, UiKit.GOLD_TEXT, w - 28);
         g.drawString(font, trackerCollapsed ? "+" : "–", x + w - 9, y + 3, UiKit.MUTED, false);
         if (trackerCollapsed) return h[0];
@@ -78,7 +78,9 @@ public final class Hud {
         return h[0];
     }
     /** Fading notification feed. */
-    public static void notices(GuiGraphics g, int x, int y, int w) {
+    public static void notices(GuiGraphics g, int x, int y, int w) { notices(g, x, y, w, Integer.MAX_VALUE); }
+    /** Fading notification feed, stopping before {@code maxY}. */
+    public static void notices(GuiGraphics g, int x, int y, int w, int maxY) {
         long now = System.currentTimeMillis();
         for (Notice n : NOTICES) {
             long age = now - n.time; if (age > 12000) continue;
@@ -87,10 +89,11 @@ public final class Hud {
             Font font = Minecraft.getInstance().font;
             List<FormattedCharSequence> lines = font.split(n.text, w - 10);
             int height = lines.size() * 9 + 4;
-            g.fill(x, y, x + w, y + height, (alpha * 3 / 4) << 24 | 0x121c26);
-            g.fill(x, y, x + 2, y + height, alpha << 24 | (n.good ? 0x8fd49a : 0xffb060));
+            if (y + height > maxY) break;
+            g.fill(x, y, x + w, y + height, (alpha * 3 / 4) << 24 | 0x1f1c17);
+            g.fill(x, y, x + 2, y + height, alpha << 24 | (n.good ? 0x9ad48a : 0xffb060));
             int ly = y + 2;
-            for (FormattedCharSequence line : lines) { g.drawString(font, line, x + 6, ly, alpha << 24 | 0xe8e2d4, false); ly += 9; }
+            for (FormattedCharSequence line : lines) { g.drawString(font, line, x + 6, ly, alpha << 24 | 0xece0bc, false); ly += 9; }
             y += height + 2;
         }
     }
@@ -107,8 +110,8 @@ public final class Hud {
         int height = Math.max(40, 24 + font.split(full, w - 34).size() * 9);
         int y = bottom - height;
         UiKit.panel(g, x, y, w, height);
-        g.fill(x + 3, y + 3, x + 27, y + 27, 0xff2a3a48);
-        UiKit.icon(g, UiKit.item("speaker:" + c.getString("speaker")), x + 7, y + 7, 16);
+        // The speaker in person, talking while the text is typed out.
+        Avatars.portrait(g, c.getString("speaker"), null, x + 3, y + 3, 24, 24, 0x5a4a32, shown < text.length(), 0);
         UiKit.text(g, Component.translatable("speaker.annocraft1800." + c.getString("speaker")), x + 31, y + 4, UiKit.GOLD_TEXT, w - 36);
         int ly = y + 15;
         for (FormattedCharSequence line : lines) { g.drawString(font, line, x + 31, ly, UiKit.TEXT, false); ly += 9; }

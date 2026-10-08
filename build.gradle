@@ -15,12 +15,16 @@ minecraft {
         configureEach {
             workingDirectory project.file('run')
             property 'forge.logging.console.level', 'info'
+            // Lets mixin-based mods (Oculus, Embeddium) find their targets under the development mappings.
+            property 'mixin.env.remapRefMap', 'true'
+            property 'mixin.env.refMapRemappingFile', "${projectDir}/build/createSrgToMcp/output.srg"
             mods { annocraft1800 { source sourceSets.main } }
         }
         client {
             if (project.hasProperty('clientSmoke')) {
                 workingDirectory project.file('run-client-smoke')
                 property 'annocraft1800.clientSmoke', 'true'
+                if (project.hasProperty('competitive')) property 'annocraft1800.competitive', 'true'
                 args '--width', '1280', '--height', '720'
             }
         }
@@ -34,10 +38,19 @@ minecraft {
         }
     }
 }
-repositories { mavenCentral() }
+repositories {
+    mavenCentral()
+    maven { url = 'https://api.modrinth.com/maven'; content { includeGroup 'maven.modrinth' } }
+}
 dependencies {
     minecraft 'net.minecraftforge:forge:1.20.1-47.4.0'
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+    // Shaders in development: ./gradlew runClient -Pshaders (or tools/dev.ps1 shaders). Mods dropped into run/mods
+    // are built for the obfuscated game and crash here; these are remapped for the development environment.
+    if (project.hasProperty('shaders')) {
+        runtimeOnly fg.deobf('maven.modrinth:embeddium:0.3.31+mc1.20.1')
+        runtimeOnly fg.deobf('maven.modrinth:oculus:1.20.1-1.8.0')
+    }
 }
 test { useJUnitPlatform() }
 tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }

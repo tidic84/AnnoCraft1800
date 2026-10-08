@@ -1,7 +1,7 @@
 {
   "name": "building.annocraft1800.rendering_works",
   "structure": "annocraft1800:rendering_works",
-  "width": 7, "height": 7, "depth": 7,
+  "width": 7, "height": 13, "depth": 7,
   "coastal": false, "level": 1,
   "economy": {
     "cost": {"coins": 500, "timber": 4},

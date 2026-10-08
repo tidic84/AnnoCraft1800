@@ -1,7 +1,7 @@
 {
   "name": "building.annocraft1800.residence_5",
   "structure": "annocraft1800:residence_5",
-  "width": 7, "height": 15, "depth": 7,
+  "width": 7, "height": 17, "depth": 7,
   "coastal": false, "level": 5,
   "economy": {
     "cost": {"coins": 4000, "steel_beams": 6, "windows": 6},

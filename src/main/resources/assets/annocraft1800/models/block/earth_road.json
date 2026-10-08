@@ -1,0 +1,9 @@
+{
+  "parent": "minecraft:block/dirt_path",
+  "textures": {
+    "particle": "annocraft1800:block/earth_road",
+    "top": "annocraft1800:block/earth_road",
+    "side": "annocraft1800:block/earth_road_side",
+    "bottom": "annocraft1800:block/packed_earth"
+  }
+}

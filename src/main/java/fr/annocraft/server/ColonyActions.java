@@ -13,20 +13,26 @@ public final class ColonyActions {
     public static BuildingService.Result handle(ServerPlayer player, String action, CompoundTag a) {
         if (!BuildingService.allowed(player)) return BuildingService.Result.fail("wrong_region");
         ColonyData data = ColonyData.get(player.server);
-        Maritime fleet = data.maritime();
+        CompanyColony colony = data.colony(player);
+        Maritime fleet = colony.maritime();
         String error;
         try {
             error = switch (action) {
-                case "ship_build" -> fleet.build(data, a.getString("island"), a.getString("type"));
-                case "ship_route" -> fleet.assignRoute(data, a.getUUID("ship"), a.getString("a"), a.getString("b"), good(a, "out"), good(a, "back"));
-                case "ship_move" -> fleet.move(data, a.getUUID("ship"), a.getString("island"));
-                case "ship_attack" -> fleet.attack(data, a.getUUID("ship"), a.getString("island"));
+                case "ship_build" -> fleet.build(colony, a.getString("island"), a.getString("type"));
+                case "ship_route" -> fleet.assignRoute(colony, a.getUUID("ship"), a.getString("a"), a.getString("b"), good(a, "out"), good(a, "back"));
+                case "ship_move" -> fleet.move(colony, a.getUUID("ship"), a.getString("island"));
+                case "ship_attack" -> fleet.attack(colony, a.getUUID("ship"), a.getString("island"));
                 case "ship_escort" -> fleet.escort(a.getUUID("ship"), a.getUUID("target"));
                 case "ship_scrap" -> fleet.scrap(a.getUUID("ship"));
-                case "trade_buy", "trade_sell" -> trade(data, action.equals("trade_buy"), a.getString("faction"), a.getString("island"), a.getString("good"), Math.max(1, Math.min(100, a.getInt("amount"))));
-                case "diplomacy" -> data.diplomacy().act(data, a.getString("faction"), a.getString("action"));
-                case "campaign_start" -> { data.startCampaign(); yield null; }
-                case "travel" -> travel(player, data, a.getString("world"));
+                case "ship_goto" -> each(a, id -> fleet.sailTo(colony, id, a.getDouble("x"), a.getDouble("z")));
+                case "ship_hunt" -> each(a, id -> fleet.hunt(colony, id, UUID.fromString(a.getString("target"))));
+                case "ship_dock" -> each(a, id -> fleet.move(colony, id, a.getString("island")));
+                case "ship_siege" -> each(a, id -> fleet.attack(colony, id, a.getString("island")));
+                case "trade_buy", "trade_sell" -> trade(colony, action.equals("trade_buy"), a.getString("faction"), a.getString("island"), a.getString("good"), Math.max(1, Math.min(100, a.getInt("amount"))));
+                case "diplomacy" -> data.diplomacy().act(colony, a.getString("faction"), a.getString("action"));
+                case "campaign_start" -> { data.startCampaign(colony); yield null; }
+                case "travel" -> travel(player, colony, a.getString("world"));
+                case "brand" -> data.brand(player.getUUID(), a.getString("name"), a.getInt("color"), flag(a.getString("flag")), a.getString("avatar"));
                 default -> "invalid_action";
             };
         } catch (RuntimeException malformed) { error = "invalid_action"; }
@@ -34,8 +40,25 @@ public final class ColonyActions {
         data.markDirty();
         return BuildingService.Result.ok();
     }
+    /** Applies an order to every selected ship ('ships': comma-separated ids). @return the first refusal, or null when one ship at least obeyed. */
+    private static String each(CompoundTag a, java.util.function.Function<UUID, String> order) {
+        String error = "invalid_ship"; boolean any = false;
+        for (String id : a.getString("ships").split(",")) {
+            if (id.isBlank()) continue;
+            String e = order.apply(UUID.fromString(id.trim()));
+            if (e == null) any = true; else if (!any) error = e;
+        }
+        return any ? null : error;
+    }
+    /** A flag sent as one hexadecimal digit (palette index) per cell. */
+    private static byte[] flag(String hex) {
+        if (hex.length() != Company.FLAG_W * Company.FLAG_H) return null;
+        byte[] f = new byte[hex.length()];
+        for (int i = 0; i < f.length; i++) { int v = Character.digit(hex.charAt(i), 16); if (v < 0) return null; f[i] = (byte) v; }
+        return f;
+    }
     private static String good(CompoundTag a, String key) { String g = a.getString(key); return g.isEmpty() ? null : g; }
-    private static String trade(ColonyData data, boolean buy, String faction, String island, String good, int amount) {
+    private static String trade(CompanyColony data, boolean buy, String faction, String island, String good, int amount) {
         Diplomacy d = data.diplomacy(); ColonyEconomy e = data.economy();
         if (!d.trades(faction)) return "no_trade";
         if (!data.ports().contains(island) || !Diplomacy.PRICES.containsKey(good)) return "invalid_action";
@@ -52,7 +75,7 @@ public final class ColonyActions {
         e.recordFlow(island, good, buy ? amount : -amount);
         return null;
     }
-    private static String travel(ServerPlayer player, ColonyData data, String world) {
+    private static String travel(ServerPlayer player, CompanyColony data, String world) {
         if (IslandLayout.NEW_WORLD.equals(world) && !data.newWorldOpen()) return "new_world_locked";
         var key = AnnoCraft.dimension(world);
         if (player.level().dimension().equals(key)) return "already";
@@ -64,7 +87,7 @@ public final class ColonyActions {
         CompoundTag t = new CompoundTag();
         for (int i = 0; i + 1 < pairs.length; i += 2) {
             String k = (String) pairs[i]; Object v = pairs[i + 1];
-            if (v instanceof UUID u) t.putUUID(k, u); else if (v instanceof Integer n) t.putInt(k, n); else if (v != null) t.putString(k, v.toString());
+            if (v instanceof UUID u) t.putUUID(k, u); else if (v instanceof Integer n) t.putInt(k, n); else if (v instanceof Double d) t.putDouble(k, d); else if (v != null) t.putString(k, v.toString());
         }
         return t;
     }

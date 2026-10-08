@@ -25,10 +25,14 @@ public final class AnnoCraft {
     public static boolean isColony(ResourceKey<Level> dimension) { return WORLDS.contains(dimension); }
     public static String worldName(ResourceKey<Level> dimension) { return NEW_WORLD.equals(dimension) ? fr.annocraft.world.IslandLayout.NEW_WORLD : fr.annocraft.world.IslandLayout.OLD_WORLD; }
     public static ResourceKey<Level> dimension(String world) { return fr.annocraft.world.IslandLayout.NEW_WORLD.equals(world) ? NEW_WORLD : ARCHIPELAGO; }
+    /** Chosen when the world is created (More world options, Game rules): one company per player instead of one shared colony. */
+    public static final net.minecraft.world.level.GameRules.Key<net.minecraft.world.level.GameRules.BooleanValue> COMPETITIVE =
+            net.minecraft.world.level.GameRules.register("annocraftCompetitive", net.minecraft.world.level.GameRules.Category.MISC, net.minecraft.world.level.GameRules.BooleanValue.create(false));
     public static final DeferredRegister<Codec<? extends ChunkGenerator>> GENERATORS = DeferredRegister.create(Registries.CHUNK_GENERATOR, ID);
     static { GENERATORS.register("archipelago", () -> ArchipelagoGenerator.CODEC); }
     public AnnoCraft(FMLJavaModLoadingContext context) {
         GENERATORS.register(context.getModEventBus());
+        fr.annocraft.world.AnnoBlocks.register(context.getModEventBus());
         context.getModEventBus().addListener((net.minecraftforge.event.RegisterGameTestsEvent event) -> {
             if (Boolean.getBoolean("annocraft1800.tests")) event.register(Boolean.getBoolean("annocraft1800.networkSmoke")
                     ? fr.annocraft.testing.NetworkGameTest.class : fr.annocraft.testing.FoundationGameTests.class);

@@ -1,0 +1,10 @@
+{
+  "variants": {
+    "": [
+      {"model": "annocraft1800:block/trodden_grass"},
+      {"model": "annocraft1800:block/trodden_grass", "y": 90},
+      {"model": "annocraft1800:block/trodden_grass", "y": 180},
+      {"model": "annocraft1800:block/trodden_grass", "y": 270}
+    ]
+  }
+}

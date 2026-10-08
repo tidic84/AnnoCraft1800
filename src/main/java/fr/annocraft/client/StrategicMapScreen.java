@@ -26,7 +26,7 @@ public final class StrategicMapScreen extends Screen {
         addRenderableWidget(new UiKit.AnnoButton(bx, 26, bw, 16, Component.translatable("world.annocraft1800.old"), null, () -> { world = IslandLayout.OLD_WORLD; clearWidgets(); init(); }).highlight(() -> IslandLayout.OLD_WORLD.equals(world)));
         addRenderableWidget(new UiKit.AnnoButton(bx, 44, bw, 16, Component.translatable("world.annocraft1800.new"), null, () -> { world = IslandLayout.NEW_WORLD; clearWidgets(); init(); }).highlight(() -> IslandLayout.NEW_WORLD.equals(world)));
         boolean open = ClientState.economy.getBoolean("new_world_open");
-        var travel = addRenderableWidget(new UiKit.AnnoButton(bx, 66, bw, 16, Component.translatable("map.annocraft1800.travel"), UiKit.item("ship"), () -> {
+        var travel = addRenderableWidget(new UiKit.AnnoButton(bx, 66, bw, 16, Component.translatable("map.annocraft1800.travel"), "ship", () -> {
             AnnoNetwork.action("travel", "world", world); onClose();
         }));
         travel.active = !world.equals(ClientState.world) && (open || IslandLayout.OLD_WORLD.equals(world));
@@ -49,7 +49,8 @@ public final class StrategicMapScreen extends Screen {
         }
         // Legend and hovered island.
         int lx = mapX + side + 8, ly = 90, lw = width - lx - 8;
-        legend(g, lx, ly, Diplomacy.PLAYER, Component.translatable("map.annocraft1800.you"), lw); ly += 11;
+        legend(g, lx, ly, ClientState.myCompanyId(), Component.translatable("map.annocraft1800.you"), lw); ly += 11;
+        for (var r : ClientState.economy.getList("rivals", net.minecraft.nbt.Tag.TAG_COMPOUND)) { String id = ((CompoundTag) r).getString("id"); legend(g, lx, ly, id, ClientState.ownerName(id), lw); ly += 11; }
         for (Diplomacy.FactionType f : Diplomacy.FACTIONS) { legend(g, lx, ly, f.id(), Component.translatable("faction.annocraft1800." + f.id()), lw); ly += 11; }
         IslandLayout.Island hovered = islandAt(mouseX, mouseY);
         if (hovered != null) {
@@ -58,7 +59,7 @@ public final class StrategicMapScreen extends Screen {
             lines.add(Component.translatable("colony.annocraft1800.island_" + (hovered.id().startsWith("nw_") ? "new" : "old"), RtsScreen.islandName(hovered.id()).replace("NM ", ""))
                     .withStyle(net.minecraft.ChatFormatting.GOLD));
             lines.add(owner.isEmpty() ? Component.translatable("map.annocraft1800.free")
-                    : owner.equals(Diplomacy.PLAYER) ? Component.translatable("map.annocraft1800.yours") : Component.translatable("faction.annocraft1800." + owner));
+                    : ClientState.mine(owner) ? Component.translatable("map.annocraft1800.yours") : ClientState.ownerName(owner));
             lines.add(Component.translatable("screen.annocraft1800.fertility", RtsScreen.names(Arrays.asList(hovered.fertility().split(",")), "resource.annocraft1800.")));
             lines.add(Component.translatable("screen.annocraft1800.deposits", RtsScreen.names(Arrays.asList(hovered.deposit().split(",")), "resource.annocraft1800.")));
             CompoundTag stock = ClientState.island(hovered.id()).getCompound("stock");

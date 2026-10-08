@@ -16,7 +16,7 @@ import java.util.*;
 import java.util.function.Supplier;
 
 public final class AnnoNetwork {
-    public static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(AnnoCraft.id("main"), () -> "4", "4"::equals, "4"::equals);
+    public static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(AnnoCraft.id("main"), () -> "6", "6"::equals, "6"::equals);
     public record BuildCommand(int action, ResourceLocation definition, BlockPos origin, int rotation, UUID target) {
         public void encode(FriendlyByteBuf b) { b.writeVarInt(action); b.writeResourceLocation(definition); b.writeBlockPos(origin); b.writeVarInt(rotation); b.writeUUID(target); }
         public static BuildCommand decode(FriendlyByteBuf b) { return new BuildCommand(b.readVarInt(), b.readResourceLocation(), b.readBlockPos(), b.readVarInt(), b.readUUID()); }
@@ -37,12 +37,12 @@ public final class AnnoNetwork {
             }); ctx.get().setPacketHandled(true);
         }
     }
-    public record CameraCommand(boolean active, double x, double z, float zoom) {
-        public CameraCommand(boolean active, double x, double z) { this(active, x, z, fr.annocraft.client.CameraMath.DEFAULT_ZOOM); }
-        public void encode(FriendlyByteBuf b) { b.writeBoolean(active); b.writeDouble(x); b.writeDouble(z); b.writeFloat(zoom); }
-        public static CameraCommand decode(FriendlyByteBuf b) { return new CameraCommand(b.readBoolean(), b.readDouble(), b.readDouble(), b.readFloat()); }
+    public record CameraCommand(boolean active, double x, double z, float zoom, float yaw, float tilt) {
+        public CameraCommand(boolean active, double x, double z) { this(active, x, z, fr.annocraft.client.CameraMath.DEFAULT_ZOOM, 135, 0); }
+        public void encode(FriendlyByteBuf b) { b.writeBoolean(active); b.writeDouble(x); b.writeDouble(z); b.writeFloat(zoom); b.writeFloat(yaw); b.writeFloat(tilt); }
+        public static CameraCommand decode(FriendlyByteBuf b) { return new CameraCommand(b.readBoolean(), b.readDouble(), b.readDouble(), b.readFloat(), b.readFloat(), b.readFloat()); }
         public static void handle(CameraCommand m, Supplier<NetworkEvent.Context> ctx) {
-            ctx.get().enqueueWork(() -> { ServerPlayer p = ctx.get().getSender(); if (p != null) CameraSessions.update(p, m.active, m.x, m.z, m.zoom); });
+            ctx.get().enqueueWork(() -> { ServerPlayer p = ctx.get().getSender(); if (p != null) CameraSessions.update(p, m.active, m.x, m.z, m.zoom, m.yaw, m.tilt); });
             ctx.get().setPacketHandled(true);
         }
     }
@@ -135,10 +135,11 @@ public final class AnnoNetwork {
     }
     public static void action(String action, Object... args) { CHANNEL.sendToServer(new ActionCommand(action, ColonyActions.args(args))); }
     public static void syncEconomy(net.minecraft.server.MinecraftServer server) {
-        EconomyUpdate update = null;
+        Map<String, EconomyUpdate> updates = new HashMap<>();
         for (ServerPlayer p : server.getPlayerList().getPlayers()) if (AnnoCraft.isColony(p.level().dimension())) {
-            if (update == null) update = new EconomyUpdate(ColonyData.get(server).economySnapshot());
-            EconomyUpdate message = update;
+            // Each company sees its own economy; one snapshot per company per update.
+            ColonyData data = ColonyData.get(server); String company = data.enroll(p.getUUID(), p.getGameProfile().getName()).company();
+            EconomyUpdate message = updates.computeIfAbsent(company, c -> new EconomyUpdate(data.economySnapshot(c)));
             CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), message);
         }
     }
@@ -154,13 +155,16 @@ public final class AnnoNetwork {
         CHANNEL.registerMessage(9, EventNotice.class, EventNotice::encode, EventNotice::decode, EventNotice::handle, Optional.of(NetworkDirection.PLAY_TO_CLIENT));
         CHANNEL.registerMessage(7, EconomyUpdate.class, EconomyUpdate::encode, EconomyUpdate::decode, EconomyUpdate::handle, Optional.of(NetworkDirection.PLAY_TO_CLIENT));
     }
-    public static void sync(ServerPlayer p) { CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), new Snapshot(ColonyData.get(p.server).snapshot(p.server))); }
+    public static void sync(ServerPlayer p) {
+        ColonyData data = ColonyData.get(p.server);
+        CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), new Snapshot(data.snapshot(p.server, true, data.enroll(p.getUUID(), p.getGameProfile().getName()).company())));
+    }
     /** Buildings, roads and economy after a change; definitions are not resent. */
     public static void syncAll(net.minecraft.server.MinecraftServer server) {
-        Snapshot update = null;
+        Map<String, Snapshot> updates = new HashMap<>(); ColonyData data = ColonyData.get(server);
         for (ServerPlayer p : server.getPlayerList().getPlayers()) if (AnnoCraft.isColony(p.level().dimension())) {
-            if (update == null) update = new Snapshot(ColonyData.get(server).snapshot(server, false));
-            Snapshot message = update;
+            String company = data.enroll(p.getUUID(), p.getGameProfile().getName()).company();
+            Snapshot message = updates.computeIfAbsent(company, c -> new Snapshot(data.snapshot(server, false, c)));
             CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), message);
         }
     }
